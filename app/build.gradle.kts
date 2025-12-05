@@ -85,4 +85,7 @@ dependencies {
     // For creating the list
     implementation(libs.androidx.recyclerview)
 
+    // For the YouTube player
+    implementation(libs.android.youtube.player)
+
 }

@@ -1,5 +1,6 @@
 package com.channelplayer;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -24,7 +25,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executors;
 
-public class SelectVideoActivity extends AppCompatActivity {
+public class SelectVideoActivity extends AppCompatActivity implements VideoAdapter.OnVideoClickListener {
 
     private static final String TAG = "SelectVideoActivity";
     public static final String CHANNEL_ID = "CHANNEL_ID";
@@ -54,7 +55,7 @@ public class SelectVideoActivity extends AppCompatActivity {
         recyclerView.setHasFixedSize(true);
         recyclerView.setLayoutManager(layoutManager);
 
-        videoAdapter = new VideoAdapter(new ArrayList<>());
+        videoAdapter = new VideoAdapter(new ArrayList<>(), this);
         recyclerView.setAdapter(videoAdapter);
 
         recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -140,7 +141,18 @@ public class SelectVideoActivity extends AppCompatActivity {
             } catch (IOException e) {
                 Log.e(TAG, "Error loading videos: ", e);
                 runOnUiThread(() -> isLoading = false);
+            } catch (Exception e) { // Catch other potential exceptions
+                Log.e(TAG, "An unexpected error occurred while loading videos: ", e);
+                runOnUiThread(() -> isLoading = false);
             }
         });
+    }
+
+    @Override
+    public void onVideoClick(VideoAdapter.VideoItem item) {
+        Intent intent = new Intent(this, PlayerActivity.class);
+        intent.putExtra(PlayerActivity.EXTRA_VIDEO_ID, item.getVideoId());
+        intent.putExtra(PlayerActivity.EXTRA_VIDEO_DESCRIPTION, item.getTitle());
+        startActivity(intent);
     }
 }

@@ -20,6 +20,11 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
 
     private List<VideoItem> videoList;
     private List<VideoItem> videoListFull;
+    private OnVideoClickListener listener;
+
+    public interface OnVideoClickListener {
+        void onVideoClick(VideoItem item);
+    }
 
     public static class VideoItem {
         private final String videoId;
@@ -54,11 +59,16 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
             videoThumbnail = v.findViewById(R.id.video_thumbnail);
             videoTitle = v.findViewById(R.id.video_title);
         }
+
+        public void bind(final VideoItem item, final OnVideoClickListener listener) {
+            itemView.setOnClickListener(v -> listener.onVideoClick(item));
+        }
     }
 
-    public VideoAdapter(List<VideoItem> videoList) {
+    public VideoAdapter(List<VideoItem> videoList, OnVideoClickListener listener) {
         this.videoList = videoList;
         this.videoListFull = new ArrayList<>(videoList);
+        this.listener = listener;
     }
 
     @NonNull
@@ -74,6 +84,7 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
         VideoItem currentItem = videoList.get(position);
         holder.videoTitle.setText(currentItem.getTitle());
         Picasso.get().load(currentItem.getThumbnailUrl()).into(holder.videoThumbnail);
+        holder.bind(currentItem, listener);
     }
 
     @Override
