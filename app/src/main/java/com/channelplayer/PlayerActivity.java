@@ -1,194 +1,223 @@
 package com.channelplayer;
 
-import android.content.pm.ActivityInfo;
-import android.content.res.Configuration;
+import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
-import android.widget.Button;
-import android.widget.SeekBar;
-import android.widget.TextView;
+import android.webkit.CookieManager;
+import android.webkit.WebChromeClient;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 import androidx.activity.OnBackPressedCallback;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants;
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer;
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener;
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.FullscreenListener;
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions;
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView;
-
-import kotlin.Unit;
-import kotlin.jvm.functions.Function0;
 
 public class PlayerActivity extends AppCompatActivity {
 
     public static final String EXTRA_VIDEO_ID = "EXTRA_VIDEO_ID";
     public static final String EXTRA_VIDEO_DESCRIPTION = "EXTRA_VIDEO_DESCRIPTION";
+    public static final String EXTRA_ACCOUNT_NAME = "EXTRA_ACCOUNT_NAME";
 
-    private YouTubePlayerView youTubePlayerView;
-    private YouTubePlayer youTubePlayer;
-    private TextView videoDescriptionText;
-    private Button playPauseButton;
-    private Button stopButton;
-    private SeekBar videoSeekBar;
-
+    private ViewOnlyWebView youtubeWebView;
     private String videoId;
-    private String videoDescription;
-    private boolean isPlaying = false;
-    private boolean isPlayerInFullScreen = false;
-    private FullScreenHelper fullScreenHelper = new FullScreenHelper(this);
-    private Function0<Unit> exitFullscreenAction = null;
+    private String accountName;
+    private boolean isYouTubePageLoaded = false;
 
+    @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
 
+        // Retrieve data from the Intent
         videoId = getIntent().getStringExtra(EXTRA_VIDEO_ID);
-        videoDescription = getIntent().getStringExtra(EXTRA_VIDEO_DESCRIPTION);
+        accountName = getIntent().getStringExtra(EXTRA_ACCOUNT_NAME);
 
-        youTubePlayerView = findViewById(R.id.youtube_player_view);
+        // Initialize WebView
+        youtubeWebView = findViewById(R.id.youtube_webview);
+        setupWebView();
 
-        // This handles portrait mode UI
-        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
-            videoDescriptionText = findViewById(R.id.video_description_text);
-            playPauseButton = findViewById(R.id.play_pause_button);
-            stopButton = findViewById(R.id.stop_button);
-            videoSeekBar = findViewById(R.id.video_seek_bar);
+        // Start the cookie syncing and loading process
+        syncAndLoadVideo();
 
-            videoDescriptionText.setText(videoDescription);
-
-            playPauseButton.setOnClickListener(v -> {
-                if (youTubePlayer != null) {
-                    if (isPlaying) {
-                        youTubePlayer.pause();
-                    } else {
-                        youTubePlayer.play();
-                    }
-                    isPlaying = !isPlaying;
-                }
-            });
-
-            stopButton.setOnClickListener(v -> {
-                if (youTubePlayer != null) {
-                    youTubePlayer.pause();
-                    isPlaying = false;
-                }
-            });
-
-            videoSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-                @Override
-                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                    if (fromUser && youTubePlayer != null) {
-                        youTubePlayer.seekTo(progress);
-                    }
-                }
-
-                @Override
-                public void onStartTrackingTouch(SeekBar seekBar) { /* Do nothing */ }
-
-                @Override
-                public void onStopTrackingTouch(SeekBar seekBar) { /* Do nothing */ }
-            });
-        }
-
-        IFramePlayerOptions iFramePlayerOptions = new IFramePlayerOptions.Builder()
-                .controls(1)
-                .origin("https://www.youtube.com")
-                .build();
-
-        youTubePlayerView.initialize(new AbstractYouTubePlayerListener() {
-            @Override
-            public void onReady(@NonNull YouTubePlayer player) {
-                youTubePlayer = player;
-                youTubePlayer.loadVideo(videoId, 0);
-            }
-
-            @Override
-            public void onCurrentSecond(@NonNull YouTubePlayer youTubePlayer, float second) {
-                if (videoSeekBar != null) videoSeekBar.setProgress((int) second);
-            }
-
-            @Override
-            public void onVideoDuration(@NonNull YouTubePlayer youTubePlayer, float duration) {
-                if (videoSeekBar != null) videoSeekBar.setMax((int) duration);
-            }
-
-            @Override
-            public void onError(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerError error) {
-                Log.e("PlayerActivity", "YouTube Player Error: " + error.toString());
-            }
-        }, true, iFramePlayerOptions);
-
-
-        addFullScreenListenerToPlayer();
-
-        // Handle back button presses using the new OnBackPressedCallback
+        // Handle back press to navigate within WebView or finish the activity
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                if (isPlayerInFullScreen) {
-                    if (exitFullscreenAction != null) {
-                        exitFullscreenAction.invoke();
-                    }
-                } else {
-                    if (youTubePlayer != null) {
-                        youTubePlayer.pause();
-                    }
-                    // Finish the activity to go back to the previous screen
-                    finish();
+                finish();
+            }
+        });
+    }
+
+    private void setupWebView() {
+        youtubeWebView.getSettings().setJavaScriptEnabled(true);
+        youtubeWebView.getSettings().setDomStorageEnabled(true); // Needed for modern websites
+        youtubeWebView.setWebChromeClient(new WebChromeClient()); // Allows fullscreen etc.
+    }
+
+    private void syncAndLoadVideo() {
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+
+        youtubeWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+
+                // Step 1: After Google login page, cookies should be set. Now load YouTube.
+                if (url.startsWith("https://accounts.google.com")) {
+                    loadYouTubeUrl();
+                }
+                // Step 2: After YouTube page loads, inject CSS to make it fullscreen-like.
+                else if (url.startsWith("https://m.youtube.com/watch")) {
+                    // Prevent script from running multiple times on the same page
+                    if (isYouTubePageLoaded) return;
+
+                    injectFullscreenCss(view);
+                    isYouTubePageLoaded = true;
                 }
             }
         });
+
+        // If an account name is provided, start by logging into Google to get cookies.
+        if (accountName != null && !accountName.isEmpty()) {
+            // This URL will use the device's logged-in Google account to create a session
+            // and set the necessary cookies in the WebView's CookieManager.
+            youtubeWebView.loadUrl("https://accounts.google.com/ServiceLogin?service=youtube");
+        } else {
+            // If there's no account, load the video directly. It may be unavailable if private.
+            loadYouTubeUrl();
+        }
     }
 
-    private void addFullScreenListenerToPlayer() {
-        youTubePlayerView.addFullscreenListener(new FullscreenListener() {
-            @Override
-            public void onEnterFullscreen(@NonNull View fullscreenView, @NonNull Function0<Unit> exitFullscreen) {
-                exitFullscreenAction = exitFullscreen;
-                isPlayerInFullScreen = true;
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-                fullScreenHelper.enterFullScreen(fullscreenView);
-
-                // Hide other views when entering fullscreen
-                if (videoDescriptionText != null) videoDescriptionText.setVisibility(View.GONE);
-                if (playPauseButton != null) playPauseButton.setVisibility(View.GONE);
-                if (stopButton != null) stopButton.setVisibility(View.GONE);
-                if (videoSeekBar != null) videoSeekBar.setVisibility(View.GONE);
-            }
-
-            @Override
-            public void onExitFullscreen() {
-                exitFullscreenAction = null;
-                isPlayerInFullScreen = false;
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-                fullScreenHelper.exitFullScreen(youTubePlayerView);
-
-                // Show other views when exiting fullscreen
-                if (videoDescriptionText != null) videoDescriptionText.setVisibility(View.VISIBLE);
-                if (playPauseButton != null) playPauseButton.setVisibility(View.VISIBLE);
-                if (stopButton != null) stopButton.setVisibility(View.VISIBLE);
-                if (videoSeekBar != null) videoSeekBar.setVisibility(View.VISIBLE);
-            }
-        });
+    private void loadYouTubeUrl() {
+        isYouTubePageLoaded = false; // Reset flag for the new page
+        // Use the mobile site URL
+        String youtubeWatchUrl = "https://m.youtube.com/watch?v=" + videoId;
+        youtubeWebView.loadUrl(youtubeWatchUrl);
     }
 
+    private void injectFullscreenCss(WebView view) {
+        // This JavaScript finds the video player and forces it to fill the WebView,
+        // while hiding everything else. This is the "theater mode" effect.
+        String script = """
+        var style = document.createElement('style');
+        style.type = 'text/css';
+        style.innerHTML = `
+            /* Make the body and html black, and hide overflow */
+            html, body {
+                background-color: black !important;
+                overflow: hidden !important;
+                height: 100% !important;
+            }
+
+            /* Hide every element on the page by default */
+            body > * {
+                display: none !important;
+            }
+
+            /* Specifically un-hide the player container and its parents */
+            ytm-watch, ytm-player, #player-container-id, #player {
+                display: block !important;
+            }
+
+            /* Force the player and its containers to fill the entire viewport */
+            ytm-watch, ytm-player, #player-container-id, #player, .html5-video-player {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important; /* Viewport Width */
+                height: 100vh !important; /* Viewport Height */
+                z-index: 9999 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+        `;
+        document.head.appendChild(style);
+
+        function safeClick(element) {
+             // Create a new 'click' event
+             const event = new MouseEvent('click', {
+                 bubbles: false,
+                 cancelable: true,
+                 view: window
+             });
+        
+             // Dispatch the event on the element
+             const cancelled = !element.dispatchEvent(event);
+        
+             // This is a good fallback, though dispatchEvent is cleaner
+             if (!cancelled) {
+                  // element.click(); // We can try the direct click if dispatch fails to unmute
+             }
+             console.log("Safely clicked element. Tag: " + element.tagName + ", Class: " + element.className);
+         }
+        
+        var attemptCount = 0;
+        var found = false;
+        var debugInterval = setInterval(function() {
+            // Find all elements with a class that contains 'unmute'. This is a broader search.
+            const elements = document.querySelectorAll(".ytp-unmute");
+        
+            if (elements.length > 0) {
+                console.log('Found ' + elements.length + ' elements with "unmute" in their class:');
+        
+                // Loop through all found elements and print their details
+                for (const el of elements) {
+                    if (el.tagName === 'BUTTON') {
+                        if (el.innerText.trim().toLowerCase().includes('unmute')) {
+                            safeClick(el);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+        
+                if (found) {
+                    clearInterval(debugInterval); // Stop after finding and logging.
+                }
+        
+            } else {
+                attemptCount++;
+                if (attemptCount > 20) { // Stop trying after 10 seconds (20 * 500ms)
+                    console.log('Could not find any elements with "unmute" in their class after 10 seconds.');
+                    clearInterval(debugInterval);
+                }
+            }
+        }, 500); // Check every 500 milliseconds.
+        """;
+        view.evaluateJavascript(script, null);
+    }
+
+    // --- WebView Lifecycle Management ---
 
     @Override
-    public void onConfigurationChanged(@NonNull Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
+    protected void onPause() {
+        super.onPause();
+        // Pausing the WebView is important to stop video playback and JS execution
+        if (youtubeWebView != null) {
+            youtubeWebView.onPause();
+        }
+    }
 
-        // The library's default UI will handle the fullscreen button clicks,
-        // which will trigger the listener we added.
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (youtubeWebView != null) {
+            youtubeWebView.onResume();
+        }
     }
 
     @Override
     protected void onDestroy() {
+        // Always destroy the WebView to prevent memory leaks
+        if (youtubeWebView != null) {
+            youtubeWebView.loadUrl("about:blank"); // Clear the view
+            youtubeWebView.stopLoading();
+            youtubeWebView.setWebChromeClient(null);
+            youtubeWebView.setWebViewClient(null);
+            youtubeWebView.destroy();
+            youtubeWebView = null;
+        }
         super.onDestroy();
-        youTubePlayerView.release();
     }
 }
