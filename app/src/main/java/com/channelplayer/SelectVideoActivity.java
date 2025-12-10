@@ -2,49 +2,38 @@ package com.channelplayer;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
-
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.channelplayer.cache.VideoItem;
+import com.channelplayer.cache.VideoViewModel;
+import com.channelplayer.cache.VideoViewModelFactory;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
-import com.google.api.services.youtube.model.SearchListResponse;
-import com.google.api.services.youtube.model.SearchResult;
 
-import com.channelplayer.cache.AppDatabase;
-import com.channelplayer.cache.VideoItem;
-import androidx.lifecycle.Observer;
-
-import com.google.api.client.http.javanet.NetHttpTransport;
-
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.Executors;
 
 public class SelectVideoActivity extends AppCompatActivity implements VideoAdapter.OnVideoClickListener {
 
     private static final String TAG = "SelectVideoActivity";
     public static final String CHANNEL_ID = "CHANNEL_ID";
 
-    private AppDatabase db;
-    private RecyclerView recyclerView;
     private VideoAdapter videoAdapter;
-    private YouTube youtube;
+    private VideoViewModel videoViewModel;
     private String channelId;
-    private GoogleSignInAccount googleSignInAccount; // Declare the variable here
-
-    private boolean isLoading = false;
-    private String nextPageToken = null;
+    private GoogleSignInAccount googleSignInAccount;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,51 +41,70 @@ public class SelectVideoActivity extends AppCompatActivity implements VideoAdapt
         setContentView(R.layout.activity_select_video);
 
         channelId = getIntent().getStringExtra(CHANNEL_ID);
-        if (channelId == null) {
-            Log.e(TAG, "No channel ID found in intent");
+        if (channelId == null || channelId.isEmpty()) {
+            Log.e(TAG, "No channel ID found in intent. Closing activity.");
             finish();
             return;
         }
 
-        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
-        recyclerView = findViewById(R.id.video_recycler_view);
-        recyclerView.setHasFixedSize(true);
-        recyclerView.setLayoutManager(layoutManager);
+        googleSignInAccount = GoogleSignIn.getLastSignedInAccount(this);
+        if (googleSignInAccount == null) {
+            Log.e(TAG, "No Google account signed in. Closing activity.");
+            finish();
+            return;
+        }
 
-        videoAdapter = new VideoAdapter(new ArrayList<>(), this);
+        // 1. Setup UI components (RecyclerView and SearchView)
+        setupRecyclerView();
+        setupSearchView();
+
+        // 2. Create the YouTube service instance
+        YouTube youtubeService = createYouTubeService(googleSignInAccount);
+
+        // 3. Initialize ViewModel using the Factory to pass dependencies
+        VideoViewModelFactory factory = new VideoViewModelFactory(getApplication(), youtubeService);
+        videoViewModel = new ViewModelProvider(this, factory).get(VideoViewModel.class);
+
+        // 4. Observe LiveData for video list changes
+        observeVideoList();
+    }
+
+    private void observeVideoList() {
+        videoViewModel.getVideoListForChannel(channelId).observe(this, videos -> {
+            // This block now receives a List<Video> named 'videos'.
+            if (videos != null) {
+                Log.d(TAG, "Updating UI with " + videos.size() + " videos from cache.");
+                videoAdapter.submitList(videos);
+            }
+        });
+    }
+    private void setupRecyclerView() {
+        RecyclerView recyclerView = findViewById(R.id.video_recycler_view);
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        recyclerView.setLayoutManager(layoutManager);
+        recyclerView.setHasFixedSize(true);
+
+        // The adapter should now extend ListAdapter
+        videoAdapter = new VideoAdapter(this);
         recyclerView.setAdapter(videoAdapter);
 
+        // Add scroll listener for pagination
         recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
-                int visibleItemCount = layoutManager.getChildCount();
                 int totalItemCount = layoutManager.getItemCount();
-                int firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition();
+                int lastVisibleItemPosition = layoutManager.findLastCompletelyVisibleItemPosition();
 
-                if (!isLoading && nextPageToken != null) {
-                    if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount
-                            && firstVisibleItemPosition >= 0) {
-                        loadVideos(nextPageToken);
-                    }
+                // Load next page when user is near the end of the list
+                if (lastVisibleItemPosition >= totalItemCount - 5) {
+                    videoViewModel.fetchNextPage(channelId);
                 }
             }
         });
+    }
 
-        // Initialize the database
-        db = AppDatabase.getDatabase(this);
-
-        // --- Observe the database for changes ---
-        // This replaces the manual `videoAdapter.addItems()` calls.
-        db.videoDao().getVideosForChannel(channelId).observe(this, videoItems -> {
-            List<VideoAdapter.VideoItem> adapterItems = new ArrayList<>();
-            for (VideoItem item : videoItems) {
-                adapterItems.add(new VideoAdapter.VideoItem(item.videoId, item.title, item.thumbnailUrl));
-            }
-            videoAdapter.updateList(adapterItems); // Use a new method in adapter to replace the list
-            isLoading = false;
-        });
-
+    private void setupSearchView() {
         SearchView searchView = findViewById(R.id.video_search_view);
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
@@ -110,91 +118,29 @@ public class SelectVideoActivity extends AppCompatActivity implements VideoAdapt
                 return false;
             }
         });
-
-        // Initialize the variable here
-        googleSignInAccount = GoogleSignIn.getLastSignedInAccount(this);
-        if (googleSignInAccount != null) {
-            GoogleAccountCredential credential = GoogleAccountCredential.usingOAuth2(
-                    this,
-                    Collections.singleton("https://www.googleapis.com/auth/youtube.readonly"));
-            credential.setSelectedAccount(googleSignInAccount.getAccount());
-
-            youtube = new YouTube.Builder(
-                    new NetHttpTransport(),
-                    new GsonFactory(),
-                    credential)
-                    .setApplicationName(getString(R.string.app_name))
-                    .build();
-
-            loadVideos(null); // Load the first page
-        } else {
-            Log.e(TAG, "No Google account signed in.");
-        }
     }
 
-    private void loadVideos(final String pageToken) {
-        isLoading = true;
-        // Use the executor from AppDatabase to run operations off the main thread
-        AppDatabase.databaseWriteExecutor.execute(() -> {
-            try {
-                // If it's the first page, check if we should even fetch
-                if (pageToken == null) {
-                    int count = db.videoDao().getVideoCountForChannel(channelId);
-                    if (count > 0) {
-                        // Data exists. We are already observing it via LiveData.
-                        // You could add logic here to fetch only if data is old.
-                        Log.d(TAG, "Data already in DB. Skipping initial fetch.");
-                        // To force a refresh anyway, just remove this if-block.
-                        // The UI is already populated by the observer, so we can just return.
-                        return;
-                    }
-                }
+    private YouTube createYouTubeService(GoogleSignInAccount account) {
+        GoogleAccountCredential credential = GoogleAccountCredential.usingOAuth2(
+                this,
+                Collections.singleton("https://www.googleapis.com/auth/youtube.readonly"));
+        credential.setSelectedAccount(account.getAccount());
 
-                YouTube.Search.List searchRequest = youtube.search()
-                        .list(Collections.singletonList("snippet"));
-
-                searchRequest.setChannelId(channelId);
-                searchRequest.setType(Collections.singletonList("video"));
-                searchRequest.setOrder("date"); // Newest first
-                searchRequest.setMaxResults(20L); // Load 20 videos per page
-                searchRequest.setPageToken(pageToken);
-
-                SearchListResponse searchResponse = searchRequest.execute();
-                nextPageToken = searchResponse.getNextPageToken();
-
-                final List<VideoItem> fetchedItems = new ArrayList<>();
-                for (SearchResult item : searchResponse.getItems()) {
-                    fetchedItems.add(new VideoItem(
-                            item.getId().getVideoId(),
-                            channelId, // Store channelId with the item
-                            item.getSnippet().getTitle(),
-                            item.getSnippet().getThumbnails().getDefault().getUrl()
-                    ));
-                }
-
-                // If first page, clear old data. Otherwise, append.
-                if (pageToken == null) {
-                    db.videoDao().deleteVideosForChannel(channelId);
-                }
-                db.videoDao().insertAll(fetchedItems);
-                // The LiveData observer in onCreate will automatically update the UI
-
-            } catch (IOException e) {
-                Log.e(TAG, "Error loading videos: ", e);
-                runOnUiThread(() -> isLoading = false);
-            } catch (Exception e) { // Catch other potential exceptions
-                Log.e(TAG, "An unexpected error occurred while loading videos: ", e);
-                runOnUiThread(() -> isLoading = false);
-            }
-        });
+        return new YouTube.Builder(
+                new NetHttpTransport(),
+                new GsonFactory(),
+                credential)
+                .setApplicationName(getString(R.string.app_name))
+                .build();
     }
 
     @Override
-    public void onVideoClick(VideoAdapter.VideoItem item) {
+    public void onVideoClick(VideoItem item) {
         Intent intent = new Intent(this, PlayerActivity.class);
-        intent.putExtra(PlayerActivity.EXTRA_VIDEO_ID, item.getVideoId());
-        intent.putExtra(PlayerActivity.EXTRA_VIDEO_DESCRIPTION, item.getTitle());
-        // Now this line will work correctly
+        intent.putExtra(PlayerActivity.EXTRA_VIDEO_ID, item.videoId);
+        // Pass the description from the clicked item.
+        // It will be fetched by the player if it's not already in the cache.
+        intent.putExtra(PlayerActivity.EXTRA_VIDEO_DESCRIPTION, item.description);
         intent.putExtra(PlayerActivity.EXTRA_ACCOUNT_NAME, googleSignInAccount.getAccount().name);
         startActivity(intent);
     }

@@ -8,10 +8,11 @@ import androidx.room.RoomDatabase;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@Database(entities = {VideoItem.class}, version = 1, exportSchema = false)
+@Database(entities = {VideoItem.class, ChannelInfo.class}, version = 2, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
     public abstract VideoDao videoDao();
+    public abstract ChannelDao channelDao();
 
     private static volatile AppDatabase INSTANCE;
     private static final int NUMBER_OF_THREADS = 4;

@@ -2,11 +2,12 @@ package com.channelplayer;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.TextView;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
@@ -19,6 +20,7 @@ public class PlayerActivity extends AppCompatActivity {
 
     private ViewOnlyWebView youtubeWebView;
     private String videoId;
+    private String videoDescription;
     private String accountName;
     private boolean isYouTubePageLoaded = false;
 
@@ -31,10 +33,21 @@ public class PlayerActivity extends AppCompatActivity {
         // Retrieve data from the Intent
         videoId = getIntent().getStringExtra(EXTRA_VIDEO_ID);
         accountName = getIntent().getStringExtra(EXTRA_ACCOUNT_NAME);
+        videoDescription = getIntent().getStringExtra(EXTRA_VIDEO_DESCRIPTION); // Retrieve the description
+
+        TextView descriptionTextView = findViewById(R.id.video_description_text);
+        if (videoDescription != null) {
+            descriptionTextView.setText(videoDescription);
+        }
 
         // Initialize WebView
         youtubeWebView = findViewById(R.id.youtube_webview);
         setupWebView();
+
+        Button playPauseButton = findViewById(R.id.play_pause_button);
+        playPauseButton.setOnClickListener(v -> {
+            sendPlayPauseClickToWebView();
+        });
 
         // Start the cookie syncing and loading process
         syncAndLoadVideo();
@@ -46,6 +59,14 @@ public class PlayerActivity extends AppCompatActivity {
                 finish();
             }
         });
+    }
+
+    private void sendPlayPauseClickToWebView() {
+        if (youtubeWebView == null || !isYouTubePageLoaded) return;
+
+        // This JavaScript finds the play/pause button by its class and clicks it.
+        String script = "window.togglePlayPause();";
+        youtubeWebView.evaluateJavascript(script, null);
     }
 
     private void setupWebView() {
@@ -134,29 +155,28 @@ public class PlayerActivity extends AppCompatActivity {
         `;
         document.head.appendChild(style);
 
+        // 2. Define a GLOBAL, reusable function to toggle playback.
+        // This is the most reliable method as it interacts directly with the <video> element.
+        window.togglePlayPause = function() {
+            var video = document.querySelector('BUTTON.ytp-large-play-button');
+            if (video) {
+                console.log('Video is paused. Calling video.play()');
+                video.click();
+            } else {
+                console.log('togglePlayPause Error: Could not find the <video> element.');
+            }
+        };
+
         function safeClick(element) {
-             // Create a new 'click' event
-             const event = new MouseEvent('click', {
-                 bubbles: false,
-                 cancelable: true,
-                 view: window
-             });
-        
-             // Dispatch the event on the element
-             const cancelled = !element.dispatchEvent(event);
-        
-             // This is a good fallback, though dispatchEvent is cleaner
-             if (!cancelled) {
-                  // element.click(); // We can try the direct click if dispatch fails to unmute
-             }
-             console.log("Safely clicked element. Tag: " + element.tagName + ", Class: " + element.className);
-         }
-        
+            element.click();
+            console.log("Safely clicked element. Tag: " + element.tagName + ", Class: " + element.className);
+        }
+
         var attemptCount = 0;
         var found = false;
         var debugInterval = setInterval(function() {
             // Find all elements with a class that contains 'unmute'. This is a broader search.
-            const elements = document.querySelectorAll(".ytp-unmute");
+            const elements = document.getElementsByClassName("ytp-unmute");
         
             if (elements.length > 0) {
                 console.log('Found ' + elements.length + ' elements with "unmute" in their class:');

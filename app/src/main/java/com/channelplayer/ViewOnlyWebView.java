@@ -4,6 +4,7 @@ package com.channelplayer;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;import android.webkit.WebView;
 
 import androidx.annotation.NonNull;
@@ -37,6 +38,7 @@ public class ViewOnlyWebView extends WebView {
     public boolean onTouchEvent(MotionEvent event) {
         // We consume the event and do nothing with it.
         // This effectively makes the WebView "read-only" to user touch input.
+        Log.i("ViewOnlyWebView", "onTouchEvent: Consumed touch event.");
         return true;
     }
 }

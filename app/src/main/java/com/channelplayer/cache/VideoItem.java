@@ -4,23 +4,60 @@ import androidx.annotation.NonNull;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 
-@Entity(tableName = "videos")public class VideoItem {
+/**
+ * Defines the schema for the "videos" table in the Room database.
+ */
+@Entity(tableName = "videos")
+public class VideoItem {
 
+    /**
+     * The unique YouTube ID for the video. This is the primary key for the table.
+     */
     @PrimaryKey
     @NonNull
-    public final String videoId;
+    public String videoId;
 
+    /**
+     * The ID of the YouTube channel this video belongs to.
+     */
     @NonNull
-    public final String channelId;
+    public String channelId;
 
-    public final String title;
-    public final String thumbnailUrl;
-    public long fetchedAt; // To track when the data was fetched
+    /**
+     * The description (or title) of the video.
+     */
+    public String description;
 
-    public VideoItem(@NonNull String videoId, @NonNull String channelId, String title, String thumbnailUrl) {
+    /**
+     * The URL for the video's thumbnail image.
+     */
+    public String thumbnailUrl;
+
+    /**
+     * A timestamp indicating when this item was added to the cache, used for ordering.
+     */
+    public long fetchedAt;
+
+    /**
+     * A no-argument constructor is required by Room to instantiate objects.
+     */
+    public VideoItem() {}
+
+    /**
+     * Constructor to create a new VideoItem.
+     * @param videoId The video's unique ID.
+     * @param channelId The ID of the video's channel.
+     * @param description The video's title/description.
+     * @param thumbnailUrl The URL of the video's thumbnail.
+     */
+    public VideoItem(
+            @NonNull String videoId,
+            @NonNull String channelId,
+            String description,
+            String thumbnailUrl) {
         this.videoId = videoId;
         this.channelId = channelId;
-        this.title = title;
+        this.description = description;
         this.thumbnailUrl = thumbnailUrl;
         this.fetchedAt = System.currentTimeMillis();
     }
