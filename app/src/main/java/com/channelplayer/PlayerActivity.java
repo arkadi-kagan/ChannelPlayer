@@ -70,6 +70,7 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private void setupWebView() {
+        youtubeWebView.getSettings().setMediaPlaybackRequiresUserGesture(false); // Thanks Aparna, https://stackoverflow.com/a/55965638
         youtubeWebView.getSettings().setJavaScriptEnabled(true);
         youtubeWebView.getSettings().setDomStorageEnabled(true); // Needed for modern websites
         youtubeWebView.setWebChromeClient(new WebChromeClient()); // Allows fullscreen etc.
@@ -158,12 +159,26 @@ public class PlayerActivity extends AppCompatActivity {
         // 2. Define a GLOBAL, reusable function to toggle playback.
         // This is the most reliable method as it interacts directly with the <video> element.
         window.togglePlayPause = function() {
-            var video = document.querySelector('BUTTON.ytp-large-play-button');
-            if (video) {
-                console.log('Video is paused. Calling video.play()');
-                video.click();
+            // YouTube's player is complex. We need to find the actual video element, which is
+            // usually inside the '.html5-video-player' container.
+            var player = document.querySelector('.html5-video-player');
+            if (player) {
+                // The 'paused' state is a property of the video element itself.
+                var video = player.querySelector('video');
+                if (video) {
+                    // Check the 'paused' property of the actual video element.
+                    if (video.paused) {
+                        console.log('Video is paused. Calling video.play()');
+                        video.play();
+                    } else {
+                        console.log('Video is playing. Calling video.pause()');
+                        video.pause();
+                    }
+                } else {
+                    console.log('togglePlayPause Error: Could not find the <video> element inside the player.');
+                }
             } else {
-                console.log('togglePlayPause Error: Could not find the <video> element.');
+                 console.log('togglePlayPause Error: Could not find the YouTube player container (.html5-video-player).');
             }
         };
 
