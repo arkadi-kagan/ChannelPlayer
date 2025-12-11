@@ -1,6 +1,7 @@
 package com.channelplayer;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -14,7 +15,23 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
+import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.services.youtube.YouTube;
+import com.google.api.services.youtube.model.VideoGetRatingResponse;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class PlayerActivity extends AppCompatActivity {
 
@@ -30,16 +47,35 @@ public class PlayerActivity extends AppCompatActivity {
 
     // --- New UI elements and state ---
     private ImageButton playPauseButton;
+    private ImageButton likeButton;
+    private ImageButton dislikeButton;
     private SeekBar videoSeekBar;
     private Handler progressUpdateHandler;
     private boolean isPlaying = false;
     private boolean isSeeking = false;
+    private String rating = "none"; // "like", "dislike", "none"
+
+    private YouTube youtube;
+    private GoogleAccountCredential credential;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private ActivityResultLauncher<Intent> requestAuthorizationLauncher;
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
+
+        requestAuthorizationLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                // Check if the user granted the permission and the result is OK.
+                if (result.getResultCode() == RESULT_OK) {
+                    // The user has granted the permission.
+                    // Retry the API call that failed.
+                    checkVideoRating();
+                }
+            });
 
         videoId = getIntent().getStringExtra(EXTRA_VIDEO_ID);
         accountName = getIntent().getStringExtra(EXTRA_ACCOUNT_NAME);
@@ -50,10 +86,13 @@ public class PlayerActivity extends AppCompatActivity {
 
         youtubeWebView = findViewById(R.id.youtube_webview);
         playPauseButton = findViewById(R.id.play_pause_button);
+        likeButton = findViewById(R.id.like_button);
+        dislikeButton = findViewById(R.id.dislike_button);
         videoSeekBar = findViewById(R.id.video_seekbar);
 
         setupWebView();
         setupPlayerControls();
+        setupYoutubeApi();
 
         syncAndLoadVideo();
 
@@ -63,7 +102,24 @@ public class PlayerActivity extends AppCompatActivity {
                 finish();
             }
         });
+        checkVideoRating();
     }
+
+    private void setupYoutubeApi() {
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
+        if (account != null) {
+            credential = GoogleAccountCredential.usingOAuth2(
+                    this, Collections.singleton("https://www.googleapis.com/auth/youtube.force-ssl"));
+            credential.setSelectedAccount(account.getAccount());
+
+            youtube = new YouTube.Builder(
+                    new NetHttpTransport(),
+                    new GsonFactory(),
+                    credential
+            ).setApplicationName(getString(R.string.app_name)).build();
+        }
+    }
+
 
     private void setupPlayerControls() {
         // --- Setup Play/Pause Button ---
@@ -79,6 +135,22 @@ public class PlayerActivity extends AppCompatActivity {
                     isPlaying = true;
                 }
             });
+        });
+
+        likeButton.setOnClickListener(v -> {
+            if ("like".equals(rating)) {
+                rateVideo("none");
+            } else {
+                rateVideo("like");
+            }
+        });
+
+        dislikeButton.setOnClickListener(v -> {
+            if ("dislike".equals(rating)) {
+                rateVideo("none");
+            } else {
+                rateVideo("dislike");
+            }
         });
 
         // --- Setup SeekBar (Ruler) ---
@@ -105,6 +177,54 @@ public class PlayerActivity extends AppCompatActivity {
         progressUpdateHandler = new Handler(Looper.getMainLooper());
     }
 
+    private void checkVideoRating() {
+        if (youtube == null) return;
+        executorService.submit(() -> {
+            try {
+                VideoGetRatingResponse response = youtube.videos().getRating(Collections.singletonList(videoId)).execute();
+                if (response.getItems() != null && !response.getItems().isEmpty()) {
+                    rating = response.getItems().get(0).getRating();
+                } else {
+                    rating = "none";
+                }
+                runOnUiThread(this::updateRatingButtons);
+            } catch (UserRecoverableAuthIOException e) {
+                requestAuthorizationLauncher.launch(e.getIntent());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private void rateVideo(String newRating) {
+        if (youtube == null) return;
+        executorService.submit(() -> {
+            try {
+                youtube.videos().rate(videoId, newRating).execute();
+                rating = newRating;
+                runOnUiThread(this::updateRatingButtons);
+            } catch (UserRecoverableAuthIOException e) {
+                requestAuthorizationLauncher.launch(e.getIntent());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private void updateRatingButtons() {
+        if ("like".equals(rating)) {
+            likeButton.setImageResource(R.drawable.like_blue);
+            dislikeButton.setImageResource(R.drawable.dislike_gray);
+        } else if ("dislike".equals(rating)) {
+            likeButton.setImageResource(R.drawable.like_gray);
+            dislikeButton.setImageResource(R.drawable.dislike_blue);
+        } else {
+            likeButton.setImageResource(R.drawable.like_gray);
+            dislikeButton.setImageResource(R.drawable.dislike_gray);
+        }
+    }
+
+
     // --- Android/JavaScript Bridge to receive updates from WebView ---
     private class JsBridge {
         @JavascriptInterface
@@ -129,9 +249,7 @@ public class PlayerActivity extends AppCompatActivity {
         }
     }
 
-    // This method is now obsolete, but we keep the new setupWebView
-    private void sendPlayPauseClickToWebView() {}
-
+    @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
         youtubeWebView.getSettings().setMediaPlaybackRequiresUserGesture(false);
         youtubeWebView.getSettings().setJavaScriptEnabled(true);

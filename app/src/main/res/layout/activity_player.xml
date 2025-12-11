@@ -30,7 +30,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#80000000"
+        android:background="@color/white"
         android:padding="8dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -40,21 +40,34 @@
             android:orientation="horizontal"
             android:layout_height="wrap_content"
             android:layout_width="match_parent"
-            >
+            android:gravity="center_vertical"
+            android:weightSum="3">
             <ImageButton
                 android:id="@+id/play_pause_button"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
+                android:layout_weight="1"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/outline_autopause_24"
                 android:contentDescription="@string/play_pause" />
 
-            <Button
-                android:id="@+id/stop_button"
-                android:layout_width="wrap_content"
+            <ImageButton
+                android:id="@+id/like_button"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Stop" />
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/like_gray"
+                android:contentDescription="@string/like" />
+
+            <ImageButton
+                android:id="@+id/dislike_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/dislike_gray"
+                android:contentDescription="@string/dislike" />
         </LinearLayout>
 
         <SeekBar
