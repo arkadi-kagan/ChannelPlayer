@@ -4,7 +4,7 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-12-05T22:42:57.055097678Z">
+        <DropdownSelection timestamp="2025-12-11T23:45:30.231070044Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="LocalEmulator" identifier="path=/home/arkadi/.android/avd/Samsung_J6.avd" />

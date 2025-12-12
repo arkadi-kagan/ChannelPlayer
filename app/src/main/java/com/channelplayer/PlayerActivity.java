@@ -2,11 +2,14 @@ package com.channelplayer;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -44,6 +47,7 @@ public class PlayerActivity extends AppCompatActivity {
     private String videoDescription;
     private String accountName;
     private boolean isYouTubePageLoaded = false;
+    private boolean isScriptInjected = false;
 
     // --- New UI elements and state ---
     private ImageButton playPauseButton;
@@ -251,11 +255,26 @@ public class PlayerActivity extends AppCompatActivity {
 
     @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
+        youtubeWebView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                    request.grant(request.getResources());
+            }
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                super.onProgressChanged(view, newProgress);
+                // Inject the script when the page is fully loaded and if it hasn't been injected yet.
+                if (newProgress == 100 && !isScriptInjected) {
+                    injectPlayerControlScript(view);
+                    isScriptInjected = true;
+                    isYouTubePageLoaded = true;
+                }
+            }
+        });
         youtubeWebView.getSettings().setMediaPlaybackRequiresUserGesture(false);
         youtubeWebView.getSettings().setJavaScriptEnabled(true);
         youtubeWebView.getSettings().setDomStorageEnabled(true);
         youtubeWebView.addJavascriptInterface(new JsBridge(), "AndroidBridge"); // Add the bridge
-        youtubeWebView.setWebChromeClient(new WebChromeClient());
     }
 
     private void syncAndLoadVideo() {
@@ -267,10 +286,15 @@ public class PlayerActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 if (url.startsWith("https://accounts.google.com")) {
                     loadYouTubeUrl();
-                } else if (url.startsWith("https://m.youtube.com/watch")) {
-                    if (isYouTubePageLoaded) return;
-                    injectPlayerControlScript(view);
-                    isYouTubePageLoaded = true;
+                }
+            }
+            @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                // When a new page starts loading, reset the injection flag.
+                if (url.startsWith("https://m.youtube.com/watch")) {
+                    isScriptInjected = false;
+                    isYouTubePageLoaded = false;
                 }
             }
         });
@@ -283,6 +307,7 @@ public class PlayerActivity extends AppCompatActivity {
 
     private void loadYouTubeUrl() {
         isYouTubePageLoaded = false;
+        isScriptInjected = false;
         String youtubeWatchUrl = "https://m.youtube.com/watch?v=" + videoId;
         youtubeWebView.loadUrl(youtubeWatchUrl);
     }
@@ -307,70 +332,70 @@ public class PlayerActivity extends AppCompatActivity {
         document.head.appendChild(style);
 
         // --- Part 2: JavaScript Player Controls ---
-        (function() {
-            function findVideoElement() {
-                // Encapsulated search for the video element
-                return document.querySelector('.html5-video-player video');
+        function findVideoElement() {
+            // Encapsulated search for the video element
+            return document.querySelector('.html5-video-player video');
+        }
+
+        // Function to toggle play/pause
+        window.togglePlayPause = function() {
+            var video = findVideoElement();
+            if (video.paused) {
+                video.play();
+            } else {
+                video.pause();
             }
+        };
 
-            // Function to toggle play/pause
-            window.togglePlayPause = function() {
-                var video = findVideoElement();
-                if (video.paused) {
-                    video.play();
-                } else {
-                    video.pause();
-                }
-            };
+        // Function to seek to a specific time
+        window.seekTo = function(timeInSeconds) {
+            var video = findVideoElement();
+            video.currentTime = timeInSeconds;
+        };
 
-            // Function to seek to a specific time
-            window.seekTo = function(timeInSeconds) {
-                var video = findVideoElement();
-                video.currentTime = timeInSeconds;
-            };
+        // Function to check if paused
+        window.is_paused = function() {
+            var video = findVideoElement();
+            return video.paused;
+        };
 
-            // Function to check if paused
-            window.is_paused = function() {
-                var video = findVideoElement();
-                return video.paused;
-            };
+        // Unmute on load
+        var attemptCount = 0;
+        var found = false;
+        var debugInterval = setInterval(function() {
+            // Find all elements with a class that contains 'unmute'. This is a broader search.
+            const elements = document.getElementsByClassName("ytp-unmute");
 
-            // Unmute on load
-            var attemptCount = 0;
-            var found = false;
-            var debugInterval = setInterval(function() {
-                // Find all elements with a class that contains 'unmute'. This is a broader search.
-                const elements = document.getElementsByClassName("ytp-unmute");
+            if (elements.length > 0) {
+                console.log('Found ' + elements.length + ' elements with "unmute" in their class:');
 
-                if (elements.length > 0) {
-                    console.log('Found ' + elements.length + ' elements with "unmute" in their class:');
-
-                    // Loop through all found elements and print their details
-                    for (const el of elements) {
-                        if (el.tagName === 'BUTTON') {
-                            if (el.innerText.trim().toLowerCase().includes('unmute')) {
-                                el.click();
-                                found = true;
-                                break;
-                            }
+                // Loop through all found elements and print their details
+                for (const el of elements) {
+                    if (el.tagName === 'BUTTON') {
+                        if (el.innerText.trim().toLowerCase().includes('unmute')) {
+                            el.click();
+                            found = true;
+                            break;
                         }
                     }
-
-                    if (found) {
-                        clearInterval(debugInterval); // Stop after finding and logging.
-                    }
-
-                } else {
-                    attemptCount++;
-                    if (attemptCount > 20) { // Stop trying after 10 seconds (20 * 500ms)
-                        console.log('Could not find any elements with "unmute" in their class after 10 seconds.');
-                        clearInterval(debugInterval);
-                    }
                 }
-            }, 500); // Check every 500 milliseconds.
-        })();
+
+                if (found) {
+                    clearInterval(debugInterval); // Stop after finding and logging.
+                }
+
+            } else {
+                attemptCount++;
+                if (attemptCount > 20) { // Stop trying after 10 seconds (20 * 500ms)
+                    console.log('Could not find any elements with "unmute" in their class after 10 seconds.');
+                    clearInterval(debugInterval);
+                }
+            }
+        }, 500); // Check every 500 milliseconds.
         """;
-        view.evaluateJavascript(script, null);
+        view.evaluateJavascript(script, value -> {
+            Log.i("injectPlayerControlScript", "Player controls injected: " + value);
+        });
     }
 
     // --- WebView Lifecycle Management ---
