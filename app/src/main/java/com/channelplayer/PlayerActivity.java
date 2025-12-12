@@ -2,7 +2,6 @@ package com.channelplayer;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -33,8 +32,11 @@ import com.google.api.services.youtube.model.VideoGetRatingResponse;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class PlayerActivity extends AppCompatActivity {
 
@@ -49,7 +51,6 @@ public class PlayerActivity extends AppCompatActivity {
     private boolean isYouTubePageLoaded = false;
     private boolean isScriptInjected = false;
 
-    // --- New UI elements and state ---
     private ImageButton playPauseButton;
     private ImageButton likeButton;
     private ImageButton dislikeButton;
@@ -64,6 +65,11 @@ public class PlayerActivity extends AppCompatActivity {
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private ActivityResultLauncher<Intent> requestAuthorizationLauncher;
 
+    // --- Timer for unmute logic ---
+    private Timer unmuteTimer;
+    private final AtomicInteger unmuteAttempts = new AtomicInteger(0);
+    private static final int MAX_UNMUTE_ATTEMPTS = 20;
+
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,15 +77,12 @@ public class PlayerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_player);
 
         requestAuthorizationLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                // Check if the user granted the permission and the result is OK.
-                if (result.getResultCode() == RESULT_OK) {
-                    // The user has granted the permission.
-                    // Retry the API call that failed.
-                    checkVideoRating();
-                }
-            });
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        checkVideoRating();
+                    }
+                });
 
         videoId = getIntent().getStringExtra(EXTRA_VIDEO_ID);
         accountName = getIntent().getStringExtra(EXTRA_ACCOUNT_NAME);
@@ -87,6 +90,14 @@ public class PlayerActivity extends AppCompatActivity {
 
         TextView descriptionTextView = findViewById(R.id.video_description_text);
         descriptionTextView.setText(videoDescription);
+
+        descriptionTextView.setOnLongClickListener(v -> {
+            if (youtubeWebView != null && isYouTubePageLoaded) {
+                safeInvoke("dumpDOM()", null);
+                Log.d("DOM_DUMP", "Requested DOM dump via long press.");
+            }
+            return true;
+        });
 
         youtubeWebView = findViewById(R.id.youtube_webview);
         playPauseButton = findViewById(R.id.play_pause_button);
@@ -109,6 +120,12 @@ public class PlayerActivity extends AppCompatActivity {
         checkVideoRating();
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        stopUnmuteTimer(); // Ensure timer is stopped when activity is destroyed
+    }
+
     private void setupYoutubeApi() {
         GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
         if (account != null) {
@@ -126,18 +143,19 @@ public class PlayerActivity extends AppCompatActivity {
 
 
     private void setupPlayerControls() {
-        // --- Setup Play/Pause Button ---
         playPauseButton.setOnClickListener(v -> {
             if (youtubeWebView == null || !isYouTubePageLoaded) return;
-            youtubeWebView.evaluateJavascript("window.togglePlayPause();", null);
-            youtubeWebView.evaluateJavascript("window.is_paused();", result -> {
-                if (result.equals("true")) {
-                    playPauseButton.setImageResource(R.drawable.baseline_play_arrow_24);
-                    isPlaying = false;
-                } else {
-                    playPauseButton.setImageResource(R.drawable.outline_autopause_24);
-                    isPlaying = true;
-                }
+
+            safeInvoke("togglePlayPause()", () -> {
+                youtubeWebView.evaluateJavascript("window.is_paused();", result -> {
+                    if ("true".equals(result)) {
+                        playPauseButton.setImageResource(R.drawable.baseline_play_arrow_24);
+                        isPlaying = false;
+                    } else {
+                        playPauseButton.setImageResource(R.drawable.outline_autopause_24);
+                        isPlaying = true;
+                    }
+                });
             });
         });
 
@@ -157,28 +175,53 @@ public class PlayerActivity extends AppCompatActivity {
             }
         });
 
-        // --- Setup SeekBar (Ruler) ---
         videoSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                // We only act when the user initiates the change
-            }
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {}
 
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-                isSeeking = true; // Pause progress updates while user is seeking
+                isSeeking = true;
             }
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                // When user releases the thumb, seek the video
-                youtubeWebView.evaluateJavascript("window.seekTo(" + seekBar.getProgress() + ");", null);
+                safeInvoke("seekTo(" + seekBar.getProgress() + ")", null);
                 isSeeking = false;
             }
         });
 
-        // --- Handler to periodically update the SeekBar ---
         progressUpdateHandler = new Handler(Looper.getMainLooper());
+    }
+
+    private void safeInvoke(String functionCall, Runnable onComplete) {
+        if (youtubeWebView == null || !isYouTubePageLoaded) return;
+
+        String functionName = functionCall.substring(0, functionCall.indexOf('('));
+
+        String script = "if (typeof window." + functionName + " === 'function') { " +
+                "    window." + functionCall + "; " + // Returns true or false from JS
+                "} else { " +
+                "    'undefined'; " +
+                "}";
+
+        youtubeWebView.evaluateJavascript(script, result -> {
+            if ("'undefined'".equals(result)) {
+                injectPlayerControlScript(youtubeWebView);
+                isScriptInjected = true;
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    youtubeWebView.evaluateJavascript("window." + functionCall, value -> {
+                        if (onComplete != null) {
+                            runOnUiThread(onComplete);
+                        }
+                    });
+                }, 100);
+            } else {
+                if (onComplete != null) {
+                    runOnUiThread(onComplete);
+                }
+            }
+        });
     }
 
     private void checkVideoRating() {
@@ -228,20 +271,17 @@ public class PlayerActivity extends AppCompatActivity {
         }
     }
 
-
-    // --- Android/JavaScript Bridge to receive updates from WebView ---
     private class JsBridge {
         @JavascriptInterface
         public void updateProgress(final double currentTime, final double duration, final boolean isPaused) {
             runOnUiThread(() -> {
-                if (isSeeking) return; // Don't update UI if user is dragging the seekbar
+                if (isSeeking) return;
 
                 if (!Double.isNaN(duration) && duration > 0) {
                     videoSeekBar.setMax((int) duration);
                     videoSeekBar.setProgress((int) currentTime);
                 }
 
-                // Update play/pause button icon based on actual video state
                 if (isPaused && isPlaying) {
                     playPauseButton.setImageResource(R.drawable.baseline_play_arrow_24);
                     isPlaying = false;
@@ -251,6 +291,20 @@ public class PlayerActivity extends AppCompatActivity {
                 }
             });
         }
+
+        @JavascriptInterface
+        public void onDomDump(String domString) {
+            final int maxLogSize = 4000;
+            if (domString == null || domString.isEmpty()) {
+                Log.d("DOM_DUMP", "Received empty or null DOM string.");
+                return;
+            }
+            for(int i = 0; i <= domString.length() / maxLogSize; i++) {
+                int start = i * maxLogSize;
+                int end = Math.min((i + 1) * maxLogSize, domString.length());
+                Log.d("DOM_DUMP", domString.substring(start, end));
+            }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -258,23 +312,21 @@ public class PlayerActivity extends AppCompatActivity {
         youtubeWebView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
-                    request.grant(request.getResources());
+                request.grant(request.getResources());
             }
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
                 super.onProgressChanged(view, newProgress);
-                // Inject the script when the page is fully loaded and if it hasn't been injected yet.
                 if (newProgress == 100 && !isScriptInjected) {
                     injectPlayerControlScript(view);
                     isScriptInjected = true;
-                    isYouTubePageLoaded = true;
                 }
             }
         });
         youtubeWebView.getSettings().setMediaPlaybackRequiresUserGesture(false);
         youtubeWebView.getSettings().setJavaScriptEnabled(true);
         youtubeWebView.getSettings().setDomStorageEnabled(true);
-        youtubeWebView.addJavascriptInterface(new JsBridge(), "AndroidBridge"); // Add the bridge
+        youtubeWebView.addJavascriptInterface(new JsBridge(), "AndroidBridge");
     }
 
     private void syncAndLoadVideo() {
@@ -286,15 +338,19 @@ public class PlayerActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 if (url.startsWith("https://accounts.google.com")) {
                     loadYouTubeUrl();
+                } else if (url.startsWith("https://m.youtube.com/watch")) {
+                    isYouTubePageLoaded = true;
+                    startUnmuteTimer();
                 }
             }
+
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                // When a new page starts loading, reset the injection flag.
                 if (url.startsWith("https://m.youtube.com/watch")) {
                     isScriptInjected = false;
                     isYouTubePageLoaded = false;
+                    stopUnmuteTimer();
                 }
             }
         });
@@ -312,123 +368,132 @@ public class PlayerActivity extends AppCompatActivity {
         youtubeWebView.loadUrl(youtubeWatchUrl);
     }
 
-    // --- Renamed from injectFullscreenCss for clarity ---
-    private void injectPlayerControlScript(WebView view) {
-        // Combined script for fullscreen CSS and JS player controls
-        String script = """
-        // --- Part 1: Fullscreen CSS ---
-        var style = document.createElement('style');
-        style.type = 'text/css';
-        style.innerHTML = `
-            html, body { background-color: black !important; overflow: hidden !important; height: 100% !important; }
-            body > * { display: none !important; }
-            ytm-watch, ytm-player, #player-container-id, #player, .html5-video-player {
-                display: block !important;
-                position: fixed !important; top: 0 !important; left: 0 !important;
-                width: 100vw !important; height: 100vh !important;
-                z-index: 9999 !important; margin: 0 !important; padding: 0 !important;
-            }
-        `;
-        document.head.appendChild(style);
+    private void startUnmuteTimer() {
+        stopUnmuteTimer();
+        unmuteAttempts.set(0);
+        unmuteTimer = new Timer();
 
-        // --- Part 2: JavaScript Player Controls ---
-        function findVideoElement() {
-            // Encapsulated search for the video element
-            return document.querySelector('.html5-video-player video');
-        }
-
-        // Function to toggle play/pause
-        window.togglePlayPause = function() {
-            var video = findVideoElement();
-            if (video.paused) {
-                video.play();
-            } else {
-                video.pause();
-            }
-        };
-
-        // Function to seek to a specific time
-        window.seekTo = function(timeInSeconds) {
-            var video = findVideoElement();
-            video.currentTime = timeInSeconds;
-        };
-
-        // Function to check if paused
-        window.is_paused = function() {
-            var video = findVideoElement();
-            return video.paused;
-        };
-
-        // Unmute on load
-        var attemptCount = 0;
-        var found = false;
-        var debugInterval = setInterval(function() {
-            // Find all elements with a class that contains 'unmute'. This is a broader search.
-            const elements = document.getElementsByClassName("ytp-unmute");
-
-            if (elements.length > 0) {
-                console.log('Found ' + elements.length + ' elements with "unmute" in their class:');
-
-                // Loop through all found elements and print their details
-                for (const el of elements) {
-                    if (el.tagName === 'BUTTON') {
-                        if (el.innerText.trim().toLowerCase().includes('unmute')) {
-                            el.click();
-                            found = true;
-                            break;
+        unmuteTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                runOnUiThread(() -> {
+                    if (!isYouTubePageLoaded || unmuteAttempts.get() >= MAX_UNMUTE_ATTEMPTS) {
+                        if (unmuteAttempts.get() >= MAX_UNMUTE_ATTEMPTS) {
+                            Log.w("UnmuteTimer", "Max unmute attempts reached, stopping timer.");
                         }
+                        stopUnmuteTimer();
+                        return;
                     }
-                }
 
-                if (found) {
-                    clearInterval(debugInterval); // Stop after finding and logging.
-                }
+                    int attempt = unmuteAttempts.incrementAndGet();
+                    Log.d("UnmuteTimer", "Attempting to unmute, attempt #" + attempt);
 
-            } else {
-                attemptCount++;
-                if (attemptCount > 20) { // Stop trying after 10 seconds (20 * 500ms)
-                    console.log('Could not find any elements with "unmute" in their class after 10 seconds.');
-                    clearInterval(debugInterval);
-                }
+                    String script = "if (typeof window.unmute === 'function') { window.unmute(); } else { 'false'; }";
+                    youtubeWebView.evaluateJavascript(script, result -> {
+                        if ("true".equals(result)) {
+                            Log.d("UnmuteTimer", "Unmute successful, stopping timer.");
+                            stopUnmuteTimer();
+                        }
+                    });
+                });
             }
-        }, 500); // Check every 500 milliseconds.
+        }, 1000, 1000); // Start after 1s, repeat every 1s
+    }
+
+    private void stopUnmuteTimer() {
+        if (unmuteTimer != null) {
+            unmuteTimer.cancel();
+            unmuteTimer = null;
+        }
+    }
+
+    private void injectPlayerControlScript(WebView view) {
+        // This script now re-queries for the 'video' element in each function
+        // to avoid issues with injection timing.
+        String script = """
+            // --- Player Control Functions ---
+            window.togglePlayPause = function() {
+                const video = document.querySelector('video');
+                if (video) {
+                    if (video.paused) { video.play(); } else { video.pause(); }
+                    return true;
+                }
+                return false;
+            };
+
+            window.seekTo = function(seconds) {
+                const video = document.querySelector('video');
+                if (video) {
+                    video.currentTime = seconds;
+                    return true;
+                }
+                return false;
+            };
+
+            window.is_paused = function() {
+                const video = document.querySelector('video');
+                return video ? video.paused : true;
+            };
+
+            window.unmute = function() {
+                const video = document.querySelector('video');
+                if (video) {
+                    if (video.muted) {
+                        video.muted = false;
+                    }
+                    // Return true if the video is now unmuted.
+                    return !video.muted;
+                }
+                return false; // Video not found
+            };
+            
+            // --- Event Listeners for Progress Reporting ---
+            // This part still needs to find the video initially, but it's less critical if it fails.
+            // The core controls will still work.
+            (function() {
+                const video = document.querySelector('video');
+                if (video) {
+                    const progressUpdater = () => {
+                        if (typeof AndroidBridge !== 'undefined') {
+                            AndroidBridge.updateProgress(video.currentTime, video.duration, video.paused);
+                        }
+                    };
+                    video.addEventListener('timeupdate', progressUpdater);
+                    video.addEventListener('pause', progressUpdater);
+                    video.addEventListener('play', progressUpdater);
+                }
+            })();
+
+            // --- DOM Dump Function ---
+            window.dumpDOM = function() {
+                function traverse(element, depth, dump) {
+                    if (!element) return;
+
+                    const indent = '  '.repeat(depth);
+                    const tagName = element.tagName.toLowerCase();
+                    const id = element.id ? `#${element.id}` : '';
+                    const classes = Array.from(element.classList);
+                    const class1 = classes.length > 0 ? `.${classes[0]}` : '.';
+                    const class2 = classes.length > 1 ? `.${classes[1]}` : '.';
+                    const classStr = `${class1}, ${class2}`;
+
+                    dump.push(`${indent}${tagName}, ${classStr}, ${id}`);
+
+                    Array.from(element.children).forEach(child => traverse(child, depth + 1, dump));
+                }
+
+                const dumpResult = [];
+                traverse(document.documentElement, 0, dumpResult);
+                const resultString = dumpResult.join('\\n');
+
+                if (typeof AndroidBridge !== 'undefined') {
+                    AndroidBridge.onDomDump(resultString);
+                } else {
+                    console.log(resultString);
+                }
+                return true;
+            };
         """;
-        view.evaluateJavascript(script, value -> {
-            Log.i("injectPlayerControlScript", "Player controls injected: " + value);
-        });
-    }
-
-    // --- WebView Lifecycle Management ---
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (youtubeWebView != null) {
-            youtubeWebView.onPause();
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (youtubeWebView != null) {
-            youtubeWebView.onResume();
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (progressUpdateHandler != null) {
-            progressUpdateHandler.removeCallbacksAndMessages(null); // Clean up handler
-        }
-        if (youtubeWebView != null) {
-            youtubeWebView.loadUrl("about:blank");
-            youtubeWebView.stopLoading();
-            youtubeWebView.removeJavascriptInterface("AndroidBridge");
-            youtubeWebView.setWebChromeClient(null);
-            youtubeWebView.setWebViewClient(null);
-            youtubeWebView.destroy();
-            youtubeWebView = null;
-        }
-        super.onDestroy();
+        view.evaluateJavascript(script, null);
     }
 }
