@@ -28,7 +28,7 @@ public interface VideoDao {
      * @param channelId The ID of the channel.
      * @return A LiveData list of videos.
      */
-    @Query("SELECT * FROM videos WHERE channelId = :channelId ORDER BY fetchedAt ASC")
+    @Query("SELECT * FROM videos WHERE channelId = :channelId ORDER BY fetchedAt DESC")
     LiveData<List<VideoItem>> getVideosForChannel(String channelId);
 
     /**

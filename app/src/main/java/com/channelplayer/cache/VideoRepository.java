@@ -150,4 +150,11 @@ public class VideoRepository {
         // ... same as before
         return videoDao.getVideoById(videoId); // Simplified for brevity
     }
+
+    public void fetchInitialVideos(String channelId) {
+        // You can reuse the existing fetch logic or create a specific one
+        // that checks if the cache is empty or stale before fetching.
+        // For simplicity, we can just call the next page fetch logic.
+        fetchNextVideoPage(channelId);
+    }
 }

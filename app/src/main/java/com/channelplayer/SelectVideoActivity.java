@@ -2,7 +2,6 @@ package com.channelplayer;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -21,9 +20,7 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 
 public class SelectVideoActivity extends AppCompatActivity implements VideoAdapter.OnVideoClickListener {
 
@@ -66,11 +63,12 @@ public class SelectVideoActivity extends AppCompatActivity implements VideoAdapt
         videoViewModel = new ViewModelProvider(this, factory).get(VideoViewModel.class);
 
         // 4. Observe LiveData for video list changes
+        videoViewModel.fetchInitialVideos(channelId);
         observeVideoList();
     }
 
     private void observeVideoList() {
-        videoViewModel.getVideoListForChannel(channelId).observe(this, videos -> {
+        videoViewModel.getFilteredVideoList(channelId).observe(this, videos -> {
             // This block now receives a List<Video> named 'videos'.
             if (videos != null) {
                 Log.d(TAG, "Updating UI with " + videos.size() + " videos from cache.");
