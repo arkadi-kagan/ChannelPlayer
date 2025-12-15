@@ -4,6 +4,8 @@ import androidx.annotation.NonNull;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 
+import com.google.api.client.util.DateTime;
+
 /**
  * Defines the schema for the "videos" table in the Room database.
  */
@@ -39,9 +41,11 @@ public class VideoItem {
     public long fetchedAt;
 
     /**
-     * A no-argument constructor is required by Room to instantiate objects.
+     * Default constructor required for Room.
      */
-    public VideoItem() {}
+    public VideoItem() {
+    }
+
 
     /**
      * Constructor to create a new VideoItem.
@@ -54,11 +58,13 @@ public class VideoItem {
             @NonNull String videoId,
             @NonNull String channelId,
             String description,
-            String thumbnailUrl) {
+            String thumbnailUrl,
+            long publishedAt
+    ) {
         this.videoId = videoId;
         this.channelId = channelId;
         this.description = description;
         this.thumbnailUrl = thumbnailUrl;
-        this.fetchedAt = System.currentTimeMillis();
+        this.fetchedAt = publishedAt;
     }
 }

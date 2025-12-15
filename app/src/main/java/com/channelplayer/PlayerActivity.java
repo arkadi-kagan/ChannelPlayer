@@ -2,10 +2,12 @@ package com.channelplayer;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -19,6 +21,7 @@ import android.widget.TextView;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
@@ -69,6 +72,8 @@ public class PlayerActivity extends AppCompatActivity {
     private Timer unmuteTimer;
     private final AtomicInteger unmuteAttempts = new AtomicInteger(0);
     private static final int MAX_UNMUTE_ATTEMPTS = 20;
+    private TextView descriptionTextView;
+    private View controlBar;
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
@@ -88,22 +93,24 @@ public class PlayerActivity extends AppCompatActivity {
         accountName = getIntent().getStringExtra(EXTRA_ACCOUNT_NAME);
         videoDescription = getIntent().getStringExtra(EXTRA_VIDEO_DESCRIPTION);
 
-        TextView descriptionTextView = findViewById(R.id.video_description_text);
+        descriptionTextView = findViewById(R.id.video_description_text);
         descriptionTextView.setText(videoDescription);
 
-        descriptionTextView.setOnLongClickListener(v -> {
-            if (youtubeWebView != null && isYouTubePageLoaded) {
-                safeInvoke("dumpDOM()", null);
-                Log.d("DOM_DUMP", "Requested DOM dump via long press.");
-            }
-            return true;
-        });
+//        descriptionTextView.setOnLongClickListener(v -> {
+//            if (youtubeWebView != null && isYouTubePageLoaded) {
+//                safeInvoke("dumpDOM()", null);
+//                Log.d("DOM_DUMP", "Requested DOM dump via long press.");
+//            }
+//            return true;
+//        });
 
         youtubeWebView = findViewById(R.id.youtube_webview);
         playPauseButton = findViewById(R.id.play_pause_button);
         likeButton = findViewById(R.id.like_button);
         dislikeButton = findViewById(R.id.dislike_button);
         videoSeekBar = findViewById(R.id.video_seekbar);
+        controlBar = findViewById(R.id.control_bar);
+
 
         setupWebView();
         setupPlayerControls();
@@ -446,7 +453,7 @@ public class PlayerActivity extends AppCompatActivity {
                 }
                 return false; // Video not found
             };
-            
+
             // --- Event Listeners for Progress Reporting ---
             // This part still needs to find the video initially, but it's less critical if it fails.
             // The core controls will still work.
@@ -495,5 +502,33 @@ public class PlayerActivity extends AppCompatActivity {
             };
         """;
         view.evaluateJavascript(script, null);
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            Log.d("PlayerActivity", "Switched to Landscape");
+
+            controlBar.setVisibility(android.view.View.GONE);
+            videoSeekBar.setVisibility(android.view.View.GONE);
+            descriptionTextView.setVisibility(android.view.View.GONE);
+
+            android.view.ViewGroup.LayoutParams layoutParams = youtubeWebView.getLayoutParams();
+            layoutParams.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+            youtubeWebView.setLayoutParams(layoutParams);
+
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            Log.d("PlayerActivity", "Switched to Portrait");
+
+            controlBar.setVisibility(android.view.View.VISIBLE);
+            videoSeekBar.setVisibility(android.view.View.VISIBLE);
+            descriptionTextView.setVisibility(android.view.View.VISIBLE);
+
+            android.view.ViewGroup.LayoutParams layoutParams = youtubeWebView.getLayoutParams();
+            layoutParams.height = 0;
+            youtubeWebView.setLayoutParams(layoutParams);
+        }
     }
 }

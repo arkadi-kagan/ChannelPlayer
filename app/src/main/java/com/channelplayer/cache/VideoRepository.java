@@ -126,7 +126,8 @@ public class VideoRepository {
                             item.getId().getVideoId(),
                             channelId, // Store channelId with the item
                             item.getSnippet().getTitle(),
-                            item.getSnippet().getThumbnails().getDefault().getUrl()
+                            item.getSnippet().getThumbnails().getDefault().getUrl(),
+                            item.getSnippet().getPublishedAt().getValue()
                     ));
                 }
 
