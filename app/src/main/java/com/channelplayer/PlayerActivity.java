@@ -55,8 +55,10 @@ public class PlayerActivity extends AppCompatActivity {
     private boolean isScriptInjected = false;
 
     private ImageButton playPauseButton;
+    private ImageButton reloadButton;
     private ImageButton likeButton;
     private ImageButton dislikeButton;
+    private ImageButton skipAd;
     private SeekBar videoSeekBar;
     private Handler progressUpdateHandler;
     private boolean isPlaying = false;
@@ -74,6 +76,9 @@ public class PlayerActivity extends AppCompatActivity {
     private static final int MAX_UNMUTE_ATTEMPTS = 20;
     private TextView descriptionTextView;
     private View controlBar;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private int progress = 0;
+    private boolean progressAltered = false;
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
@@ -96,18 +101,20 @@ public class PlayerActivity extends AppCompatActivity {
         descriptionTextView = findViewById(R.id.video_description_text);
         descriptionTextView.setText(videoDescription);
 
-//        descriptionTextView.setOnLongClickListener(v -> {
-//            if (youtubeWebView != null && isYouTubePageLoaded) {
-//                safeInvoke("dumpDOM()", null);
-//                Log.d("DOM_DUMP", "Requested DOM dump via long press.");
-//            }
-//            return true;
-//        });
+        descriptionTextView.setOnLongClickListener(v -> {
+            if (youtubeWebView != null && isYouTubePageLoaded) {
+                safeInvoke("dumpDOM()", null);
+                Log.d("DOM_DUMP", "Requested DOM dump via long press.");
+            }
+            return true;
+        });
 
         youtubeWebView = findViewById(R.id.youtube_webview);
         playPauseButton = findViewById(R.id.play_pause_button);
+        reloadButton = findViewById(R.id.reload);
         likeButton = findViewById(R.id.like_button);
         dislikeButton = findViewById(R.id.dislike_button);
+        skipAd = findViewById(R.id.skip_ad);
         videoSeekBar = findViewById(R.id.video_seekbar);
         controlBar = findViewById(R.id.control_bar);
 
@@ -148,22 +155,30 @@ public class PlayerActivity extends AppCompatActivity {
         }
     }
 
+    private void togglePlayPause() {
+        if (youtubeWebView == null || !isYouTubePageLoaded) return;
+        safeInvoke("togglePlayPause()", () -> {
+            youtubeWebView.evaluateJavascript("window.is_paused();", result -> {
+                if ("true".equals(result)) {
+                    playPauseButton.setImageResource(R.drawable.baseline_play_arrow_24);
+                    isPlaying = false;
+                } else {
+                    playPauseButton.setImageResource(R.drawable.outline_autopause_24);
+                    isPlaying = true;
+                }
+            });
+        });
+    }
 
     private void setupPlayerControls() {
         playPauseButton.setOnClickListener(v -> {
-            if (youtubeWebView == null || !isYouTubePageLoaded) return;
+            togglePlayPause();
+        });
 
-            safeInvoke("togglePlayPause()", () -> {
-                youtubeWebView.evaluateJavascript("window.is_paused();", result -> {
-                    if ("true".equals(result)) {
-                        playPauseButton.setImageResource(R.drawable.baseline_play_arrow_24);
-                        isPlaying = false;
-                    } else {
-                        playPauseButton.setImageResource(R.drawable.outline_autopause_24);
-                        isPlaying = true;
-                    }
-                });
-            });
+        reloadButton.setOnClickListener(v -> {
+            progress = videoSeekBar.getProgress();
+            progressAltered = true;
+            syncAndLoadVideo();
         });
 
         likeButton.setOnClickListener(v -> {
@@ -182,6 +197,10 @@ public class PlayerActivity extends AppCompatActivity {
             }
         });
 
+        skipAd.setOnClickListener(v -> {
+            safeInvoke("skipAd()", null);
+        });
+
         videoSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {}
@@ -194,6 +213,7 @@ public class PlayerActivity extends AppCompatActivity {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
                 safeInvoke("seekTo(" + seekBar.getProgress() + ")", null);
+                progressAltered = false;
                 isSeeking = false;
             }
         });
@@ -278,6 +298,13 @@ public class PlayerActivity extends AppCompatActivity {
         }
     }
 
+    private void ensureVideoMaximized() {
+        if (youtubeWebView != null && isYouTubePageLoaded) {
+            safeInvoke("ensureVideoMaximized()", null);
+            Log.d("PlayerActivity", "Function ensureVideoMaximized called.");
+        }
+    }
+
     private class JsBridge {
         @JavascriptInterface
         public void updateProgress(final double currentTime, final double duration, final boolean isPaused) {
@@ -321,6 +348,10 @@ public class PlayerActivity extends AppCompatActivity {
             public void onPermissionRequest(final PermissionRequest request) {
                 request.grant(request.getResources());
             }
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                super.onShowCustomView(view, callback);
+                callback.onCustomViewHidden();
+            }
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
                 super.onProgressChanged(view, newProgress);
@@ -347,6 +378,7 @@ public class PlayerActivity extends AppCompatActivity {
                     loadYouTubeUrl();
                 } else if (url.startsWith("https://m.youtube.com/watch")) {
                     isYouTubePageLoaded = true;
+                    doChangeConfiguration(getResources().getConfiguration().orientation);
                     startUnmuteTimer();
                 }
             }
@@ -411,6 +443,11 @@ public class PlayerActivity extends AppCompatActivity {
         if (unmuteTimer != null) {
             unmuteTimer.cancel();
             unmuteTimer = null;
+            if (progressAltered) {
+                videoSeekBar.setProgress(progress);
+                safeInvoke("seekTo(" + progress + ")", null);
+                progressAltered = false;
+            }
         }
     }
 
@@ -418,6 +455,43 @@ public class PlayerActivity extends AppCompatActivity {
         // This script now re-queries for the 'video' element in each function
         // to avoid issues with injection timing.
         String script = """
+            window.ensureVideoMaximized = function() {
+                if (document.querySelector('#full-screen-player-style'))
+                    return;
+
+                var style = document.createElement('style');
+                style.id = 'full-screen-player-style';
+                style.type = 'text/css';
+                style.innerHTML = `
+                    /* Make the body and html black, and hide overflow */
+                    html, body {
+                        background-color: black !important;
+                        overflow: hidden !important;
+                        height: 100% !important;
+                    }
+                    /* Hide every element on the page by default */
+                    body > * {
+                        display: none !important;
+                    }
+                    /* Specifically un-hide the player container and its parents */
+                    ytm-watch, ytm-player, #player-container-id, #player {
+                        display: block !important;
+                    }
+                    /* Force the player and its containers to fill the entire viewport */
+                    ytm-watch, ytm-player, #player-container-id, #player, .html5-video-player {
+                        position: fixed !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        width: 100vw !important; /* Viewport Width */
+                        height: 100vh !important; /* Viewport Height */
+                        z-index: 9999 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
             // --- Player Control Functions ---
             window.togglePlayPause = function() {
                 const video = document.querySelector('video');
@@ -454,6 +528,15 @@ public class PlayerActivity extends AppCompatActivity {
                 return false; // Video not found
             };
 
+            window.skipAd = function() {
+                var skipAd = document.querySelector('BUTTON[id^="skip-ad"]');
+                if (skipAd) {
+                    skipAd.click();
+                    return true;
+                }
+                return false;
+            }
+
             // --- Event Listeners for Progress Reporting ---
             // This part still needs to find the video initially, but it's less critical if it fails.
             // The core controls will still work.
@@ -483,8 +566,9 @@ public class PlayerActivity extends AppCompatActivity {
                     const class1 = classes.length > 0 ? `.${classes[0]}` : '.';
                     const class2 = classes.length > 1 ? `.${classes[1]}` : '.';
                     const classStr = `${class1}, ${class2}`;
+                    const text = element.textContent ? `: ${element.textContent.trim().substring(0, 20)}` : '';
 
-                    dump.push(`${indent}${tagName}, ${classStr}, ${id}`);
+                    dump.push(`${indent}${tagName}, ${classStr}, ${id}, ${text}`);
 
                     Array.from(element.children).forEach(child => traverse(child, depth + 1, dump));
                 }
@@ -504,31 +588,38 @@ public class PlayerActivity extends AppCompatActivity {
         view.evaluateJavascript(script, null);
     }
 
-    @Override
-    public void onConfigurationChanged(@NonNull Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-
-        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+    public void doChangeConfiguration(int orientation) {
+        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
             Log.d("PlayerActivity", "Switched to Landscape");
 
             controlBar.setVisibility(android.view.View.GONE);
             videoSeekBar.setVisibility(android.view.View.GONE);
             descriptionTextView.setVisibility(android.view.View.GONE);
 
+            ensureVideoMaximized();
+
             android.view.ViewGroup.LayoutParams layoutParams = youtubeWebView.getLayoutParams();
             layoutParams.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
             youtubeWebView.setLayoutParams(layoutParams);
 
-        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+        } else if (orientation == Configuration.ORIENTATION_PORTRAIT) {
             Log.d("PlayerActivity", "Switched to Portrait");
 
             controlBar.setVisibility(android.view.View.VISIBLE);
             videoSeekBar.setVisibility(android.view.View.VISIBLE);
             descriptionTextView.setVisibility(android.view.View.VISIBLE);
 
+            ensureVideoMaximized();
+
             android.view.ViewGroup.LayoutParams layoutParams = youtubeWebView.getLayoutParams();
             layoutParams.height = 0;
             youtubeWebView.setLayoutParams(layoutParams);
         }
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        doChangeConfiguration(newConfig.orientation);
     }
 }

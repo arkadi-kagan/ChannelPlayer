@@ -8,4 +8,6 @@
     <string name="play_pause">Play or Pause video</string>
     <string name="like">Like</string>
     <string name="dislike">Dislike</string>
+    <string name="reload">Reload</string>
+    <string name="skip_ad">Skip advertisement</string>
 </resources>
