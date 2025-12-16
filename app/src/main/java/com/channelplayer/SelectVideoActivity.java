@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.channelplayer.cache.ConfigRepository;
 import com.channelplayer.cache.VideoItem;
 import com.channelplayer.cache.VideoViewModel;
 import com.channelplayer.cache.VideoViewModelFactory;
@@ -31,11 +32,14 @@ public class SelectVideoActivity extends AppCompatActivity implements VideoAdapt
     private VideoViewModel videoViewModel;
     private String channelId;
     private GoogleSignInAccount googleSignInAccount;
+    public ConfigRepository configRepository;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_select_video);
+
+        configRepository = ConfigRepository.getInstance(this);
 
         channelId = getIntent().getStringExtra(CHANNEL_ID);
         if (channelId == null || channelId.isEmpty()) {
@@ -59,7 +63,7 @@ public class SelectVideoActivity extends AppCompatActivity implements VideoAdapt
         YouTube youtubeService = createYouTubeService(googleSignInAccount);
 
         // 3. Initialize ViewModel using the Factory to pass dependencies
-        VideoViewModelFactory factory = new VideoViewModelFactory(getApplication(), youtubeService);
+        VideoViewModelFactory factory = new VideoViewModelFactory(getApplication(), youtubeService, configRepository);
         videoViewModel = new ViewModelProvider(this, factory).get(VideoViewModel.class);
 
         // 4. Observe LiveData for video list changes

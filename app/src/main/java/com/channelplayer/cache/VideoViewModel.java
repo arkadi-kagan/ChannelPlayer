@@ -23,9 +23,9 @@ public class VideoViewModel extends AndroidViewModel {
     private LiveData<List<VideoItem>> sourceVideos = null;
 
 
-    public VideoViewModel(@NonNull Application application, @NonNull YouTube youtubeService) {
+    public VideoViewModel(@NonNull Application application, @NonNull YouTube youtubeService, @NonNull ConfigRepository configRepository) {
         super(application);
-        repository = new VideoRepository(application, youtubeService);
+        repository = new VideoRepository(application, youtubeService, configRepository);
     }
 
     public LiveData<List<VideoItem>> getFilteredVideoList(String channelId) {

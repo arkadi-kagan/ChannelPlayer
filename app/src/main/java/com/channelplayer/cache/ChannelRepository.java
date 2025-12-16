@@ -1,44 +1,69 @@
 package com.channelplayer.cache;
 
+import android.app.Activity;
 import android.app.Application;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.Uri;
 import android.util.Log;
+import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.LiveData;
 
+import com.channelplayer.R;
 import com.google.api.services.youtube.YouTube;
 import com.google.api.services.youtube.model.Channel;
 import com.google.api.services.youtube.model.ChannelListResponse;
 import com.google.api.services.youtube.model.SearchListResponse;
-import com.google.api.services.youtube.model.SearchResult;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 public class ChannelRepository {
     private static final String TAG = "ChannelRepository";
-    private static final String USER_CHANNELS_FILENAME = "channel_handles.txt";
+    private static final String USER_CHANNELS_FILENAME = "channel_handles.json";
+    private static final String PREFS_NAME = "ChannelPlayerPrefs";
+    private static final String KEY_CONFIG_FILE_URI = "configFileUri";
 
     private final ChannelDao channelDao;
     private final YouTube youtubeService;
     private final Executor executor;
     private final Application application;
+    private final ConfigRepository configRepository;
 
-    public ChannelRepository(Application application, YouTube youtubeService) {
+    public List<String> banned_video_ids;
+
+    public ChannelRepository(Application application, YouTube youtubeService, ConfigRepository configRepository) {
         AppDatabase db = AppDatabase.getDatabase(application);
         this.application = application;
         this.channelDao = db.channelDao();
         this.youtubeService = youtubeService;
+        this.configRepository = configRepository;
         this.executor = Executors.newSingleThreadExecutor();
 
         executor.execute(this::setupUserChannelsFile);
@@ -58,7 +83,7 @@ public class ChannelRepository {
 
         Log.d(TAG, "User channels file not found. Creating from resource...");
         // Copy the resource file content to the new user-editable file.
-        try (InputStream inputStream = application.getResources().openRawResource(com.channelplayer.R.raw.channel_ids);
+        try (InputStream inputStream = application.getResources().openRawResource(R.raw.channel_handles);
              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
              FileOutputStream fileOutputStream = new FileOutputStream(userFile);
              OutputStreamWriter writer = new OutputStreamWriter(fileOutputStream)) {
@@ -92,10 +117,15 @@ public class ChannelRepository {
     }
 
     private void refreshChannelsFromNetwork() {
-        List<String> handles = readChannelHandlesFromFile();
         List<ChannelInfo> channelsToInsert = new ArrayList<>();
 
-        for (String handle : handles) {
+        List<ChannelInfo> allChannels = channelDao.getAllChannelsSync();
+        Set<String> channelsToRemove = new HashSet<>();
+        for (ChannelInfo channel : allChannels) {
+            channelsToRemove.add(channel.channelId);
+        }
+
+        for (String handle : configRepository.getChannelHandles()) {
             try {
                 // Check if we already have this channel and its ID.
                 ChannelInfo cached = channelDao.getChannelByHandleSync(handle);
@@ -122,6 +152,7 @@ public class ChannelRepository {
                     info.thumbnailUrl = channel.getSnippet().getThumbnails().getDefault().getUrl();
                     info.fetchedAt = System.currentTimeMillis();
 
+                    channelsToRemove.remove(info.channelId);
                     channelsToInsert.add(info);
                 }
             } catch (IOException e) {
@@ -132,6 +163,7 @@ public class ChannelRepository {
         // After fetching all, insert them into the database in one transaction.
         if (!channelsToInsert.isEmpty()) {
             channelDao.insertAll(channelsToInsert);
+            channelDao.deleteChannels(channelsToRemove);
         }
     }
 
@@ -144,44 +176,5 @@ public class ChannelRepository {
             return response.getItems().get(0).getSnippet().getChannelId();
         }
         return null;
-    }
-
-    private List<String> readChannelHandlesFromFile() {
-        List<String> channelHandles = new ArrayList<>();
-        File userFile = new File(application.getExternalFilesDir(null), USER_CHANNELS_FILENAME);
-
-        // First, try to read from the user-editable file in external storage.
-        if (userFile.exists()) {
-            Log.d(TAG, "Reading channel handles from user file: " + userFile.getAbsolutePath());
-            try (BufferedReader reader = new BufferedReader(new FileReader(userFile))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (!line.trim().isEmpty()) {
-                        channelHandles.add(line.trim());
-                    }
-                }
-            } catch (IOException e) {
-                Log.e(TAG, "Error reading user channel handles file, falling back to resource.", e);
-                // If reading the user file fails, clear the list and proceed to fallback.
-                channelHandles.clear();
-            }
-        }
-
-        // If the user file doesn't exist or was empty/failed to read, use the resource file.
-        if (channelHandles.isEmpty()) {
-            Log.d(TAG, "User file not found or empty, reading from resource file.");
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(application.getResources().openRawResource(com.channelplayer.R.raw.channel_ids)))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (!line.trim().isEmpty()) {
-                        channelHandles.add(line.trim());
-                    }
-                }
-            } catch (IOException e) {
-                Log.e(TAG, "Error reading channel handles from resource file", e);
-            }
-        }
-
-        return channelHandles;
     }
 }

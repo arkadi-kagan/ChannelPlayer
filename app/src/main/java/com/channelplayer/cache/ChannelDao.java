@@ -6,6 +6,7 @@ import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Data Access Object for the ChannelInfo entity.
@@ -26,6 +27,9 @@ public interface ChannelDao {
     @Query("SELECT * FROM channels ORDER BY title ASC")
     LiveData<List<ChannelInfo>> getAllChannels();
 
+    @Query("SELECT * FROM channels ORDER BY title ASC")
+    List<ChannelInfo> getAllChannelsSync();
+
     /**
      * Gets a single channel by its handle. This is a synchronous call for background use.
      * @param handle The channel handle (e.g., "@MrBeast").
@@ -33,4 +37,7 @@ public interface ChannelDao {
      */
     @Query("SELECT * FROM channels WHERE handle = :handle")
     ChannelInfo getChannelByHandleSync(String handle);
+
+    @Query("DELETE FROM channels WHERE channelId IN (:channelsToRemove)")
+    void deleteChannels(Set<String> channelsToRemove);
 }

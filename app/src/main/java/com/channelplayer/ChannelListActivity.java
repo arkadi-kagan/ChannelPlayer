@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.channelplayer.cache.ChannelInfo;
 import com.channelplayer.cache.ChannelViewModel;
 import com.channelplayer.cache.ChannelViewModelFactory;
+import com.channelplayer.cache.ConfigRepository;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
@@ -26,11 +27,14 @@ public class ChannelListActivity extends AppCompatActivity implements ChannelAda
     private static final String TAG = "ChannelListActivity";
     private ChannelAdapter channelAdapter;
     private ChannelViewModel channelViewModel;
+    private ConfigRepository configRepository;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_channel_list);
+
+        configRepository = ConfigRepository.getInstance(this);
 
         // 1. Setup RecyclerView and Adapter
         setupRecyclerView();
@@ -43,7 +47,7 @@ public class ChannelListActivity extends AppCompatActivity implements ChannelAda
             YouTube youtubeService = createYouTubeService(signedInAccount);
 
             // 3. Use a ViewModelFactory to pass the youtubeService to the ViewModel
-            ChannelViewModelFactory factory = new ChannelViewModelFactory(getApplication(), youtubeService);
+            ChannelViewModelFactory factory = new ChannelViewModelFactory(getApplication(), youtubeService, configRepository);
             channelViewModel = new ViewModelProvider(this, factory).get(ChannelViewModel.class);
 
             // 4. Observe the LiveData from the ViewModel

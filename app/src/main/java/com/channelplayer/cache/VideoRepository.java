@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -28,18 +29,22 @@ public class VideoRepository {
     private final VideoDao videoDao;
     private final Executor executor;
     private final SharedPreferences sharedPreferences;
+    private final ConfigRepository configRepository;
+
 
     // Preference key for storing the next page token
     private static final String PREF_NEXT_PAGE_TOKEN = "next_page_token_";
 
     private final String API_KEY;
 
-    public VideoRepository(Application application, YouTube youtubeService) {
+    public VideoRepository(Application application, YouTube youtubeService, ConfigRepository configRepository) {
         AppDatabase db = AppDatabase.getDatabase(application);
         this.API_KEY = getApiKey(application);
         this.videoDao = db.videoDao();
         this.executor = Executors.newSingleThreadExecutor();
         this.youtubeService = youtubeService;
+        this.configRepository = configRepository;
+
         // Initialize SharedPreferences to store page tokens
         this.sharedPreferences = application.getSharedPreferences("VideoRepositoryPrefs", Context.MODE_PRIVATE);
     }
@@ -121,7 +126,10 @@ public class VideoRepository {
 
             if (response != null) {
                 List<VideoItem> freshVideos = new ArrayList<>();
+                Map<String, String> banned_video = configRepository.getBannedVideos();
                 for (SearchResult item : response.getItems()) {
+                    if (banned_video.containsKey(item.getId().getVideoId()))
+                        continue;
                     freshVideos.add(new VideoItem(
                             item.getId().getVideoId(),
                             channelId, // Store channelId with the item
