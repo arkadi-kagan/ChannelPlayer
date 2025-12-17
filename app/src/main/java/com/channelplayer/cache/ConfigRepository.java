@@ -192,8 +192,9 @@ public class ConfigRepository {
      */
     private void saveDefaultConfigToUri(Uri targetUri) {
         // The file com.channelplayer.R.raw.channel_handles is mentioned in your provided context
-        try (InputStream inputStream = activity.getResources().openRawResource(R.raw.channel_handles);
-             OutputStream outputStream = activity.getContentResolver().openOutputStream(targetUri)) {
+        try {
+            InputStream inputStream = activity.getResources().openRawResource(R.raw.channel_handles);
+            OutputStream outputStream = activity.getContentResolver().openOutputStream(targetUri);
 
             if (outputStream == null) throw new IOException("Failed to open output stream for URI: " + targetUri);
 

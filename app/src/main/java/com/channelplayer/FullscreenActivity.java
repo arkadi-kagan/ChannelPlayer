@@ -10,6 +10,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.channelplayer.cache.ConfigRepository;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -45,6 +46,8 @@ public class FullscreenActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         // Set the content view to our new layout with the sign-in button
         setContentView(R.layout.activity_fullscreen);
+
+        ConfigRepository.getInstance(this);
 
         // 1. Configure Google Sign-In
         // We request the user's basic profile and permission to read YouTube data.
