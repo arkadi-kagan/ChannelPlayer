@@ -13,8 +13,8 @@ android {
         applicationId = "com.channelplayer"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0"
+        versionCode = 4
+        versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
