@@ -3,6 +3,8 @@ package com.channelplayer;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Filter;
+import android.widget.Filterable;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -12,15 +14,20 @@ import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.channelplayer.cache.ChannelInfo; // Use the entity from the cache package
+import com.channelplayer.cache.VideoItem;
 import com.squareup.picasso.Picasso;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * An adapter for displaying a list of YouTube channels in a RecyclerView.
  * This adapter uses ListAdapter for efficient updates when used with LiveData.
  */
-public class ChannelAdapter extends ListAdapter<ChannelInfo, ChannelAdapter.ChannelViewHolder> {
+public class ChannelAdapter extends ListAdapter<ChannelInfo, ChannelAdapter.ChannelViewHolder> implements Filterable {
 
     private final OnChannelClickListener listener;
+    private List<ChannelInfo> originalList = new ArrayList<>();
 
     /**
      * Interface for handling click events on items in the RecyclerView.
@@ -52,6 +59,52 @@ public class ChannelAdapter extends ListAdapter<ChannelInfo, ChannelAdapter.Chan
         ChannelInfo currentItem = getItem(position);
         holder.bind(currentItem, listener);
     }
+
+    @Override
+    public void submitList(List<ChannelInfo> list) {
+        // Keep a copy of the master list.
+        this.originalList = list == null ? new ArrayList<>() : new ArrayList<>(list);
+        super.submitList(this.originalList);
+    }
+
+    @Override
+    public Filter getFilter() {
+        return channelFilter;
+    }
+
+    private final Filter channelFilter = new Filter() {
+        @Override
+        protected FilterResults performFiltering(CharSequence constraint) {
+            List<ChannelInfo> filteredList = new ArrayList<>();
+
+            if (constraint == null || constraint.length() == 0) {
+                filteredList.addAll(originalList);
+            } else {
+                String filterPattern = constraint.toString().toLowerCase().trim();
+                for (ChannelInfo item : originalList) {
+                    if (item.title.toLowerCase().contains(filterPattern)) {
+                        filteredList.add(item);
+                    }
+                }
+            }
+
+            FilterResults results = new FilterResults();
+            results.values = filteredList;
+            return results;
+        }
+
+        @Override
+        protected void publishResults(CharSequence constraint, FilterResults results) {
+            // We call super.submitList here to display the filtered list,
+            // which will still be efficiently diffed and updated.
+            List<ChannelInfo> filteredList = (List<ChannelInfo>) results.values;
+            if (filteredList == null) {
+                filteredList = new ArrayList<>();
+            }
+            // Use the parent's submitList to update the UI with the filtered results.
+            ChannelAdapter.super.submitList(filteredList);
+        }
+    };
 
     /**
      * ViewHolder for a single channel item.

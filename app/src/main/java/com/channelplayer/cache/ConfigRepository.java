@@ -96,8 +96,8 @@ public class ConfigRepository {
 
             // Parse the JSON using org.json
             JSONObject jsonObject = new JSONObject();
-            jsonObject.put("channel_handles", channel_handles);
-            jsonObject.put("banned_video_ids", banned_video_ids);
+            jsonObject.put("channel_handles", new JSONArray(channel_handles));
+            jsonObject.put("banned_video_ids", new JSONObject(banned_video_ids));
 
             OutputStream stream = activity.getContentResolver().openOutputStream(configUri, "w");
             stream.write(jsonObject.toString(4).getBytes(StandardCharsets.UTF_8));
@@ -170,7 +170,7 @@ public class ConfigRepository {
                             saveUriToPreferences(uri);
                             Toast.makeText(activity, "Using existing config file.", Toast.LENGTH_SHORT).show();
                         })
-                        .setIcon(android.R.drawable.ic_dialog_alert)
+                        .setIcon(R.drawable.ban_video)
                         .show();
                 return; // Wait for user decision
             }

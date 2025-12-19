@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SearchView;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -38,6 +39,7 @@ public class ChannelListActivity extends AppCompatActivity implements ChannelAda
 
         // 1. Setup RecyclerView and Adapter
         setupRecyclerView();
+        setupSearchView();
 
         // 2. Authenticate and Initialize ViewModel
         GoogleSignInAccount signedInAccount = GoogleSignIn.getLastSignedInAccount(this);
@@ -66,6 +68,22 @@ public class ChannelListActivity extends AppCompatActivity implements ChannelAda
         // Initialize the adapter (it's empty at first) and set the click listener
         channelAdapter = new ChannelAdapter(this);
         recyclerView.setAdapter(channelAdapter);
+    }
+
+    private void setupSearchView() {
+        SearchView searchView = findViewById(R.id.channel_search_view);
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                return false;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                channelAdapter.getFilter().filter(newText);
+                return false;
+            }
+        });
     }
 
     private YouTube createYouTubeService(GoogleSignInAccount account) {

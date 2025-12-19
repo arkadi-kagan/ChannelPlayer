@@ -17,13 +17,16 @@ import android.webkit.WebViewClient;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.channelplayer.cache.ConfigRepository;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
@@ -56,6 +59,7 @@ public class PlayerActivity extends AppCompatActivity {
 
     private ImageButton playPauseButton;
     private ImageButton reloadButton;
+    private ImageButton banVideoButton;
     private ImageButton likeButton;
     private ImageButton dislikeButton;
     private ImageButton skipAd;
@@ -112,6 +116,7 @@ public class PlayerActivity extends AppCompatActivity {
         youtubeWebView = findViewById(R.id.youtube_webview);
         playPauseButton = findViewById(R.id.play_pause_button);
         reloadButton = findViewById(R.id.reload);
+        banVideoButton = findViewById(R.id.ban_video);
         likeButton = findViewById(R.id.like_button);
         dislikeButton = findViewById(R.id.dislike_button);
         skipAd = findViewById(R.id.skip_ad);
@@ -180,6 +185,27 @@ public class PlayerActivity extends AppCompatActivity {
             progressAltered = true;
             syncAndLoadVideo();
         });
+
+        banVideoButton.setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                    .setTitle("Ban Video")
+                    .setMessage("Are you sure you want to ban this video?")
+                    .setIcon(R.drawable.ban_video) // Or your specific "ban_video" drawable
+                    .setPositiveButton("Yes", (dialog, which) -> {
+                        // Call ConfigRepository to ban the video
+                        ConfigRepository.getInstance(this).banVideo(videoId, videoDescription);
+
+                        // Show a brief toast and exit the activity
+                        Toast.makeText(this, "Video banned.", Toast.LENGTH_SHORT).show();
+                        finish();
+                    })
+                    .setNegativeButton("No", (dialog, which) -> {
+                        dialog.dismiss();
+                    })
+                    .setCancelable(true)
+                    .show();
+        });
+
 
         likeButton.setOnClickListener(v -> {
             if ("like".equals(rating)) {
@@ -477,6 +503,10 @@ public class PlayerActivity extends AppCompatActivity {
                     ytm-watch, ytm-player, #player-container-id, #player {
                         display: block !important;
                     }
+                    #header-bar {
+                        display: none !important;
+                    }
+
                     /* Force the player and its containers to fill the entire viewport */
                     ytm-watch, ytm-player, #player-container-id, #player, .html5-video-player {
                         position: fixed !important;
