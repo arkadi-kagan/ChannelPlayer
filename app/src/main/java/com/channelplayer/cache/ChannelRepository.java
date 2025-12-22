@@ -1,18 +1,8 @@
 package com.channelplayer.cache;
 
-import android.app.Activity;
 import android.app.Application;
-import android.content.Context;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.net.Uri;
 import android.util.Log;
-import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.LiveData;
 
 import com.channelplayer.R;
@@ -21,25 +11,17 @@ import com.google.api.services.youtube.model.Channel;
 import com.google.api.services.youtube.model.ChannelListResponse;
 import com.google.api.services.youtube.model.SearchListResponse;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -47,16 +29,12 @@ import java.util.concurrent.Executors;
 public class ChannelRepository {
     private static final String TAG = "ChannelRepository";
     private static final String USER_CHANNELS_FILENAME = "channel_handles.json";
-    private static final String PREFS_NAME = "ChannelPlayerPrefs";
-    private static final String KEY_CONFIG_FILE_URI = "configFileUri";
 
     private final ChannelDao channelDao;
     private final YouTube youtubeService;
     private final Executor executor;
     private final Application application;
     private final ConfigRepository configRepository;
-
-    public List<String> banned_video_ids;
 
     public ChannelRepository(Application application, YouTube youtubeService, ConfigRepository configRepository) {
         AppDatabase db = AppDatabase.getDatabase(application);

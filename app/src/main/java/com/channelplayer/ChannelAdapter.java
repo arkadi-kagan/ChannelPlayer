@@ -14,7 +14,6 @@ import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.channelplayer.cache.ChannelInfo; // Use the entity from the cache package
-import com.channelplayer.cache.VideoItem;
 import com.squareup.picasso.Picasso;
 
 import java.util.ArrayList;
@@ -111,8 +110,8 @@ public class ChannelAdapter extends ListAdapter<ChannelInfo, ChannelAdapter.Chan
      * It holds the views and binds the data to them.
      */
     public static class ChannelViewHolder extends RecyclerView.ViewHolder {
-        public ImageView channelIcon;
-        public TextView channelDescription;
+        public final ImageView channelIcon;
+        public final TextView channelDescription;
 
         public ChannelViewHolder(View v) {
             super(v);

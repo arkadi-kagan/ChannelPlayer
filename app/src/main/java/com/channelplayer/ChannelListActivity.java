@@ -28,14 +28,13 @@ public class ChannelListActivity extends AppCompatActivity implements ChannelAda
     private static final String TAG = "ChannelListActivity";
     private ChannelAdapter channelAdapter;
     private ChannelViewModel channelViewModel;
-    private ConfigRepository configRepository;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_channel_list);
 
-        configRepository = ConfigRepository.getInstance(this);
+        ConfigRepository configRepository = ConfigRepository.getInstance(this);
 
         // 1. Setup RecyclerView and Adapter
         setupRecyclerView();

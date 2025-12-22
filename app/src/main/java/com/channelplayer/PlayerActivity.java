@@ -26,7 +26,6 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.channelplayer.cache.ConfigRepository;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
@@ -52,7 +51,6 @@ public class PlayerActivity extends AppCompatActivity {
 
     private ViewOnlyWebView youtubeWebView;
     private String videoId;
-    private String videoDescription;
     private String accountName;
     private boolean isYouTubePageLoaded = false;
     private boolean isScriptInjected = false;
@@ -64,13 +62,11 @@ public class PlayerActivity extends AppCompatActivity {
     private ImageButton dislikeButton;
     private ImageButton skipAd;
     private SeekBar videoSeekBar;
-    private Handler progressUpdateHandler;
     private boolean isPlaying = false;
     private boolean isSeeking = false;
     private String rating = "none"; // "like", "dislike", "none"
 
     private YouTube youtube;
-    private GoogleAccountCredential credential;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private ActivityResultLauncher<Intent> requestAuthorizationLauncher;
 
@@ -100,7 +96,7 @@ public class PlayerActivity extends AppCompatActivity {
 
         videoId = getIntent().getStringExtra(EXTRA_VIDEO_ID);
         accountName = getIntent().getStringExtra(EXTRA_ACCOUNT_NAME);
-        videoDescription = getIntent().getStringExtra(EXTRA_VIDEO_DESCRIPTION);
+        String videoDescription = getIntent().getStringExtra(EXTRA_VIDEO_DESCRIPTION);
 
         descriptionTextView = findViewById(R.id.video_description_text);
         descriptionTextView.setText(videoDescription);
@@ -140,7 +136,7 @@ public class PlayerActivity extends AppCompatActivity {
     private void setupYoutubeApi() {
         GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
         if (account != null) {
-            credential = GoogleAccountCredential.usingOAuth2(
+            GoogleAccountCredential credential = GoogleAccountCredential.usingOAuth2(
                     this, Collections.singleton("https://www.googleapis.com/auth/youtube.force-ssl"));
             credential.setSelectedAccount(account.getAccount());
 
@@ -239,7 +235,7 @@ public class PlayerActivity extends AppCompatActivity {
             }
         });
 
-        progressUpdateHandler = new Handler(Looper.getMainLooper());
+        Handler progressUpdateHandler = new Handler(Looper.getMainLooper());
     }
 
     private void dumpDOM() {

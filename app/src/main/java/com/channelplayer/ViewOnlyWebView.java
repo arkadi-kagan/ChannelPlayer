@@ -33,12 +33,19 @@ public class ViewOnlyWebView extends WebView {
      * The 'SuppressLint' is to suppress a lint warning about not calling super.onTouchEvent,
      * which is intentional here.
      */
-    @SuppressLint("ClickableInScrollableWidget")
+    @SuppressLint({"ClickableInScrollableWidget", "ClickableViewAccessibility"})
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         // We consume the event and do nothing with it.
         // This effectively makes the WebView "read-only" to user touch input.
         Log.i("ViewOnlyWebView", "onTouchEvent: Consumed touch event.");
+        return true;
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    @Override
+    public boolean performClick() {
+        Log.i("ViewOnlyWebView", "performClick: Consumed click event.");
         return true;
     }
 }

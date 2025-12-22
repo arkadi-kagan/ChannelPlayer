@@ -41,8 +41,8 @@ public class ConfigRepository {
 
     private final AppCompatActivity activity;
 
-    public List<String> channel_handles;
-    public Map<String, String> banned_video_ids;    // Video ID to description string
+    public final List<String> channel_handles;
+    public final Map<String, String> banned_video_ids;    // Video ID to description string
 
     private static ConfigRepository instance;
 
@@ -203,6 +203,8 @@ public class ConfigRepository {
             while ((length = inputStream.read(buffer)) > 0) {
                 outputStream.write(buffer, 0, length);
             }
+            outputStream.close();
+            inputStream.close();
             Log.i(TAG, "Successfully copied default config to " + targetUri);
             Toast.makeText(activity, "Configuration file saved.", Toast.LENGTH_SHORT).show();
 
@@ -249,8 +251,6 @@ public class ConfigRepository {
     /**
      * Loads the channel handles from the user-defined configuration file.
      * If no file has been configured, it initiates the copyConfig() flow.
-     *
-     * @return A list of channel handles, or an empty list if loading fails.
      */
     private void loadConfig() {
         SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);

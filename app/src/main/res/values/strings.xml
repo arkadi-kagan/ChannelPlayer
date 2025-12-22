@@ -1,8 +1,6 @@
 <resources>
     <string name="app_name">ChannelPlayer</string>
     <string name="title_activity_fullscreen">Youtube Channel Player</string>
-    <string name="dummy_button">Dummy Button</string>
-    <string name="dummy_content">DUMMY\nCONTENT</string>
     <string name="channel_icon_description">Icon of a Youtube channel</string>
     <string name="video_thumbnail_description">Thumbnail of a youtube video</string>
     <string name="play_pause">Play or Pause video</string>

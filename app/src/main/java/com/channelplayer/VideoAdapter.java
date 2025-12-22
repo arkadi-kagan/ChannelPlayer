@@ -65,8 +65,8 @@ public class VideoAdapter extends ListAdapter<VideoItem, VideoAdapter.VideoViewH
     }
 
     public static class VideoViewHolder extends RecyclerView.ViewHolder {
-        public ImageView videoThumbnail;
-        public TextView videoDescription;
+        public final ImageView videoThumbnail;
+        public final TextView videoDescription;
 
         public VideoViewHolder(View v) {
             super(v);

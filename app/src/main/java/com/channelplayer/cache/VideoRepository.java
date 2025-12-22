@@ -3,17 +3,12 @@ package com.channelplayer.cache;
 import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
-import android.os.Bundle;
 
 import androidx.lifecycle.LiveData;
 
 import com.google.api.services.youtube.YouTube;
 import com.google.api.services.youtube.model.SearchListResponse;
 import com.google.api.services.youtube.model.SearchResult;
-import com.google.api.services.youtube.model.Video;
-import com.google.api.services.youtube.model.VideoListResponse;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -22,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 
 public class VideoRepository {
     private final YouTube youtubeService;
@@ -35,11 +29,8 @@ public class VideoRepository {
     // Preference key for storing the next page token
     private static final String PREF_NEXT_PAGE_TOKEN = "next_page_token_";
 
-    private final String API_KEY;
-
     public VideoRepository(Application application, YouTube youtubeService, ConfigRepository configRepository) {
         AppDatabase db = AppDatabase.getDatabase(application);
-        this.API_KEY = getApiKey(application);
         this.videoDao = db.videoDao();
         this.executor = Executors.newSingleThreadExecutor();
         this.youtubeService = youtubeService;
@@ -47,18 +38,6 @@ public class VideoRepository {
 
         // Initialize SharedPreferences to store page tokens
         this.sharedPreferences = application.getSharedPreferences("VideoRepositoryPrefs", Context.MODE_PRIVATE);
-    }
-
-    private String getApiKey(Application application) {
-        try {
-            ApplicationInfo ai = application.getPackageManager().getApplicationInfo(application.getPackageName(), PackageManager.GET_META_DATA);
-            Bundle bundle = ai.metaData;
-            return bundle.getString("com.google.android.youtube.API_KEY");
-        } catch (PackageManager.NameNotFoundException | NullPointerException e) {
-            e.printStackTrace();
-            // Handle error - maybe return null or an empty string and log a fatal error
-            return null;
-        }
     }
 
     /**
@@ -152,12 +131,6 @@ public class VideoRepository {
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    // (getVideoDetails function remains the same)
-    public LiveData<VideoItem> getVideoDetails(String videoId) {
-        // ... same as before
-        return videoDao.getVideoById(videoId); // Simplified for brevity
     }
 
     public void fetchInitialVideos(String channelId) {

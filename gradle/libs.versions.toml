@@ -12,7 +12,7 @@ appcompat = "1.6.1"
 material = "1.4.0"
 google-gms-auth = "21.2.0"
 google-api-client = "2.4.0"
-google-api-services-youtube = "v3-rev20240523-2.0.0"
+google-api-services-youtube = "v3-rev20250714-2.0.0"
 google-http-client-gson = "1.44.1"
 picasso = "2.8"
 recyclerview = "1.3.2"
@@ -22,7 +22,6 @@ constraintlayout = "2.1.4"
 room = "2.6.1"
 lifecycle = "2.8.3"
 okhttp = "4.12.0"
-googleApiClientOkhttp = "1.31.5"
 ksp = "2.0.21-1.0.28" # See https://central.sonatype.com/artifact/com.google.devtools.ksp/com.google.devtools.ksp.gradle.plugin/versions
 
 [libraries]
@@ -44,7 +43,7 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 google-gms-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "google-gms-auth" }
 google-api-client-android = { group = "com.google.api-client", name = "google-api-client-android", version.ref = "google-api-client" }
-google-api-services-youtube = { group = "com.google.apis", name = "google-api-services-youtube", version = "v3-rev20250714-2.0.0" }
+google-api-services-youtube = { group = "com.google.apis", name = "google-api-services-youtube", version.ref = "google-api-services-youtube" }
 google-http-client-gson = { group = "com.google.http-client", name = "google-http-client-gson", version.ref = "google-http-client-gson" }
 picasso = { group = "com.squareup.picasso", name = "picasso", version.ref = "picasso" }
 androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
