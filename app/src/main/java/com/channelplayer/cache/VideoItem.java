@@ -2,6 +2,8 @@ package com.channelplayer.cache;
 
 import androidx.annotation.NonNull;
 import androidx.room.Entity;
+import androidx.room.ForeignKey;
+import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
 import com.google.api.client.util.DateTime;
@@ -9,7 +11,10 @@ import com.google.api.client.util.DateTime;
 /**
  * Defines the schema for the "videos" table in the Room database.
  */
-@Entity(tableName = "videos")
+@Entity(
+        tableName = "videos",
+        indices = {@Index(value = {"fetchedAt"}, unique = false)}
+)
 public class VideoItem {
 
     /**

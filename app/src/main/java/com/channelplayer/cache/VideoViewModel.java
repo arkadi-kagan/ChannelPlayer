@@ -66,4 +66,8 @@ public class VideoViewModel extends AndroidViewModel {
     public void fetchInitialVideos(String channelId) {
         repository.fetchInitialVideos(channelId);
     }
+
+    public void banVideo(String videoId) {
+        repository.banVideo(videoId);
+    }
 }

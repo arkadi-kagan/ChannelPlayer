@@ -184,8 +184,10 @@ public class PlayerActivity extends AppCompatActivity {
                     .setMessage("Are you sure you want to ban this video?")
                     .setIcon(R.drawable.ban_video) // Or your specific "ban_video" drawable
                     .setPositiveButton("Yes", (dialog, which) -> {
-                        // Call ConfigRepository to ban the video
-                        ConfigRepository.getInstance(this).banVideo(videoId, videoDescription);
+                        Intent data = new Intent();
+                        data.putExtra("VIDEO_BANNED", true);
+                        data.putExtra("VIDEO_ID", videoId);
+                        setResult(RESULT_OK, data);
 
                         // Show a brief toast and exit the activity
                         Toast.makeText(this, "Video banned.", Toast.LENGTH_SHORT).show();

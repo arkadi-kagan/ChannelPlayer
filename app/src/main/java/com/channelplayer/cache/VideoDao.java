@@ -54,6 +54,9 @@ public interface VideoDao {
     @Query("DELETE FROM videos WHERE channelId = :channelId")
     void deleteVideosForChannel(String channelId);
 
+    @Query("DELETE FROM videos WHERE videoId = :videoId")
+    void deleteSingleVideo(String videoId);
+
     /**
      * Counts the number of videos cached for a specific channel.
      * @param channelId The ID of the channel.

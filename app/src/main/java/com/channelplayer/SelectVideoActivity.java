@@ -3,6 +3,9 @@ package com.channelplayer;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
@@ -136,6 +139,22 @@ public class SelectVideoActivity extends AppCompatActivity implements VideoAdapt
                 .build();
     }
 
+    // Define the launcher as a member variable
+    private final ActivityResultLauncher<Intent> playerActivityResultLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    boolean isBanned = result.getData().getBooleanExtra("VIDEO_BANNED", false);
+                    String videoId = result.getData().getStringExtra("VIDEO_ID");
+
+                    if (isBanned && videoId != null) {
+                        Log.d(TAG, "Video with ID " + videoId + " is banned.");
+                        videoViewModel.banVideo(videoId);
+                    }
+                }
+            }
+    );
+
     @Override
     public void onVideoClick(VideoItem item) {
         Intent intent = new Intent(this, PlayerActivity.class);
@@ -144,6 +163,6 @@ public class SelectVideoActivity extends AppCompatActivity implements VideoAdapt
         // It will be fetched by the player if it's not already in the cache.
         intent.putExtra(PlayerActivity.EXTRA_VIDEO_DESCRIPTION, item.description);
         intent.putExtra(PlayerActivity.EXTRA_ACCOUNT_NAME, googleSignInAccount.getAccount().name);
-        startActivity(intent);
+        playerActivityResultLauncher.launch(intent);
     }
 }

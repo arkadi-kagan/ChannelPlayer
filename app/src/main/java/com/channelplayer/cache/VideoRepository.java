@@ -166,4 +166,14 @@ public class VideoRepository {
         // For simplicity, we can just call the next page fetch logic.
         fetchNextVideoPage(channelId);
     }
+
+    public void banVideo(String videoId) {
+        executor.execute(() -> {
+            VideoItem item = videoDao.getVideoByIdSync(videoId);
+            if (item == null)
+                return;
+            configRepository.banVideo(videoId, item.description);
+            videoDao.deleteSingleVideo(videoId);
+        });
+    }
 }
