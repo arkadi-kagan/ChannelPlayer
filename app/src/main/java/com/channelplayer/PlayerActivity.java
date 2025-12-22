@@ -105,14 +105,6 @@ public class PlayerActivity extends AppCompatActivity {
         descriptionTextView = findViewById(R.id.video_description_text);
         descriptionTextView.setText(videoDescription);
 
-        descriptionTextView.setOnLongClickListener(v -> {
-            if (youtubeWebView != null && isYouTubePageLoaded) {
-                safeInvoke("dumpDOM()", null);
-                Log.d("DOM_DUMP", "Requested DOM dump via long press.");
-            }
-            return true;
-        });
-
         youtubeWebView = findViewById(R.id.youtube_webview);
         playPauseButton = findViewById(R.id.play_pause_button);
         reloadButton = findViewById(R.id.reload);
@@ -225,6 +217,7 @@ public class PlayerActivity extends AppCompatActivity {
 
         skipAd.setOnClickListener(v -> {
             safeInvoke("skipAd()", null);
+            Log.d("PlayerActivity", "Function skipAd called.");
         });
 
         videoSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -245,6 +238,10 @@ public class PlayerActivity extends AppCompatActivity {
         });
 
         progressUpdateHandler = new Handler(Looper.getMainLooper());
+    }
+
+    private void dumpDOM() {
+        youtubeWebView.evaluateJavascript("window.dumpDOM();", null);
     }
 
     private void safeInvoke(String functionCall, Runnable onComplete) {
@@ -481,6 +478,18 @@ public class PlayerActivity extends AppCompatActivity {
         // This script now re-queries for the 'video' element in each function
         // to avoid issues with injection timing.
         String script = """
+            // Helper to bypass TrustedHTML restrictions
+            function getTrustedHTML(html) {
+                if (window.trustedTypes && window.trustedTypes.createPolicy) {
+                    const policy = window.trustedTypes.defaultPolicy ||\s
+                                   window.trustedTypes.createPolicy('web-view-injection', {
+                                       createHTML: (s) => s
+                                   });
+                    return policy.createHTML(html);
+                }
+                return html;
+            }
+
             window.ensureVideoMaximized = function() {
                 if (document.querySelector('#full-screen-player-style'))
                     return;
@@ -488,7 +497,7 @@ public class PlayerActivity extends AppCompatActivity {
                 var style = document.createElement('style');
                 style.id = 'full-screen-player-style';
                 style.type = 'text/css';
-                style.innerHTML = `
+                const css = `
                     /* Make the body and html black, and hide overflow */
                     html, body {
                         background-color: black !important;
@@ -519,6 +528,7 @@ public class PlayerActivity extends AppCompatActivity {
                         padding: 0 !important;
                     }
                 `;
+                style.innerHTML = getTrustedHTML(css);
                 document.head.appendChild(style);
             }
 
@@ -570,7 +580,7 @@ public class PlayerActivity extends AppCompatActivity {
             // --- Event Listeners for Progress Reporting ---
             // This part still needs to find the video initially, but it's less critical if it fails.
             // The core controls will still work.
-            (function() {
+            window.setupProgressUpdater = function() {
                 const video = document.querySelector('video');
                 if (video) {
                     const progressUpdater = () => {
@@ -582,7 +592,7 @@ public class PlayerActivity extends AppCompatActivity {
                     video.addEventListener('pause', progressUpdater);
                     video.addEventListener('play', progressUpdater);
                 }
-            })();
+            }
 
             // --- DOM Dump Function ---
             window.dumpDOM = function() {
@@ -616,6 +626,7 @@ public class PlayerActivity extends AppCompatActivity {
             };
         """;
         view.evaluateJavascript(script, null);
+        view.evaluateJavascript("window.setupProgressUpdater();", null);
     }
 
     public void doChangeConfiguration(int orientation) {
