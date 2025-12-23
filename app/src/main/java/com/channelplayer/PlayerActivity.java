@@ -3,6 +3,7 @@ package com.channelplayer;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -35,7 +36,10 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
 import com.google.api.services.youtube.model.VideoGetRatingResponse;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.util.Collections;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -79,6 +83,8 @@ public class PlayerActivity extends AppCompatActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private int progress = 0;
     private boolean progressAltered = false;
+    private ActivityResultLauncher<Intent> createFileLauncher;
+    private String pendingLogs;
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
@@ -111,7 +117,17 @@ public class PlayerActivity extends AppCompatActivity {
         videoSeekBar = findViewById(R.id.video_seekbar);
         controlBar = findViewById(R.id.control_bar);
 
-
+        createFileLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null && pendingLogs != null) {
+                        Uri uri = result.getData().getData();
+                        writeTextToUri(uri, pendingLogs);
+                        pendingLogs = null;
+                    }
+                }
+        );
+        
         setupWebView();
         setupPlayerControls();
         setupYoutubeApi();
@@ -218,6 +234,19 @@ public class PlayerActivity extends AppCompatActivity {
             Log.d("PlayerActivity", "Function skipAd called.");
         });
 
+        //skipAd.setOnLongClickListener(v -> {
+        //    Log.d("PlayerActivity", "SkipAd button long clicked.");
+        //    youtubeWebView.evaluateJavascript("window.dumpDOM();", value -> {
+        //        String logs = getLogcatOutput();
+        //
+        //        // Use the main handler to show UI feedback or save the file
+        //        runOnUiThread(() -> {
+        //            saveLogsToFile(logs);
+        //        });
+        //    });
+        //    return true;
+        //});
+
         videoSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {}
@@ -236,6 +265,46 @@ public class PlayerActivity extends AppCompatActivity {
         });
 
         Handler progressUpdateHandler = new Handler(Looper.getMainLooper());
+    }
+
+    private String getLogcatOutput() {
+        StringBuilder log = new StringBuilder();
+        try {
+            // -d: dump the log to screen and exits
+            // -v threadtime: includes date, invocation time, priority, tag, and PID
+            // *:V (optional): filter for all Verbose logs
+            Process process = Runtime.getRuntime().exec("logcat -d -v threadtime");
+            BufferedReader bufferedReader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()));
+
+            String line;
+            while ((line = bufferedReader.readLine()) != null) {
+                log.append(line).append("\n");
+            }
+        } catch (IOException e) {
+            Log.e("PlayerActivity", "Logcat capture failed", e);
+        }
+        return log.toString();
+    }
+
+    private void saveLogsToFile(String logs) {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/plain");
+        intent.putExtra(Intent.EXTRA_TITLE, "channel_player_logs.txt");
+
+        // We need to store the logs temporarily to write them once the user picks a location
+        this.pendingLogs = logs;
+        createFileLauncher.launch(intent);
+    }
+
+    private void writeTextToUri(Uri uri, String text) {
+        try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+            os.write(text.getBytes());
+            Toast.makeText(this, "Logs saved successfully", Toast.LENGTH_SHORT).show();
+        } catch (IOException e) {
+            Log.e("PlayerActivity", "Failed to write logs", e);
+        }
     }
 
     private void dumpDOM() {
@@ -567,7 +636,7 @@ public class PlayerActivity extends AppCompatActivity {
             };
 
             window.skipAd = function() {
-                var skipAd = document.querySelector('BUTTON[id^="skip-ad"]');
+                var skipAd = document.querySelector('.ytp-ad-skip-button-modern');
                 if (skipAd) {
                     skipAd.click();
                     return true;
