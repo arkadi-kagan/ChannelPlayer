@@ -46,18 +46,20 @@ public class ConfigRepository {
 
     private static ConfigRepository instance;
 
-    public static ConfigRepository getInstance(AppCompatActivity activity) {
+    public static ConfigRepository getInstance(AppCompatActivity activity, Runnable onConfigReady) {
         if (instance == null) {
-            instance = new ConfigRepository(activity);
+            instance = new ConfigRepository(activity, onConfigReady);
+        } else {
+            onConfigReady.run();
         }
         return instance;
     }
 
-    private ConfigRepository(AppCompatActivity activity) {
+    private ConfigRepository(AppCompatActivity activity, Runnable onConfigReady) {
         this.activity = activity;
         channel_handles = new ArrayList<>();
         banned_video_ids = new HashMap<>();
-        loadConfig();
+        loadConfig(onConfigReady);
     }
 
     public List<String> getChannelHandles() {
@@ -73,17 +75,18 @@ public class ConfigRepository {
 
     public void banVideo(String videoId, String description) {
         banned_video_ids.put(videoId, description);
-        saveConfig();
+        saveConfig(() -> {
+            Log.i(TAG, "Banned video with ID: " + videoId);
+        });
     }
 
-    private void saveConfig() {
+    private void saveConfig(Runnable onConfigReady) {
         SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String uriString = prefs.getString(KEY_CONFIG_FILE_URI, null);
 
         if (uriString == null) {
             Log.d(TAG, "No config file URI found in SharedPreferences. Starting copyConfig().");
-            copyConfig(); // Ask user to create/select the config file
-            saveConfig();
+            copyConfig(() -> { loadConfig(onConfigReady); }); // Ask user to create/select the config file
             return;
         }
 
@@ -100,6 +103,7 @@ public class ConfigRepository {
             jsonObject.put("banned_video_ids", new JSONObject(banned_video_ids));
 
             OutputStream stream = activity.getContentResolver().openOutputStream(configUri, "w");
+            assert stream != null;
             stream.write(jsonObject.toString(4).getBytes(StandardCharsets.UTF_8));
             stream.close();
 
@@ -109,14 +113,12 @@ public class ConfigRepository {
             Log.e(TAG, "Permission denied for URI. The user may have revoked access. Resetting.", e);
             // Clear the invalid URI and ask the user to select the file again.
             clearUriFromPreferences();
-            copyConfig();
-            saveConfig();
+            copyConfig(() -> { loadConfig(onConfigReady); });
             return;
         } catch (FileNotFoundException e) {
             Log.e(TAG, "Config file not found at URI. It may have been moved or deleted. Resetting.", e);
             clearUriFromPreferences();
-            copyConfig();
-            saveConfig();
+            copyConfig(() -> { loadConfig(onConfigReady); });
             return;
         } catch (IOException e) {
             Log.e(TAG, "Failed to write config file.", e);
@@ -127,7 +129,7 @@ public class ConfigRepository {
     }
 
 
-    private void copyConfig() {
+    private void copyConfig(Runnable onReady) {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/json");
@@ -138,7 +140,7 @@ public class ConfigRepository {
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                         Uri uri = result.getData().getData();
                         if (uri != null) {
-                            handleFileSelection(uri);
+                            handleFileSelection(uri, onReady);
                         }
                     }
                 });
@@ -153,7 +155,7 @@ public class ConfigRepository {
      *
      * @param uri The URI of the file selected by the user.
      */
-    private void handleFileSelection(Uri uri) {
+    private void handleFileSelection(Uri uri, Runnable onReady) {
         // Check if the file already contains data. ACTION_CREATE_DOCUMENT can return a URI to an existing file.
         try (InputStream inputStream = activity.getContentResolver().openInputStream(uri)) {
             if (inputStream != null && inputStream.available() > 0) {
@@ -182,7 +184,7 @@ public class ConfigRepository {
         saveDefaultConfigToUri(uri);
         saveUriToPreferences(uri);
 
-        loadConfig();
+        onReady.run();
     }
 
     /**
@@ -252,13 +254,13 @@ public class ConfigRepository {
      * Loads the channel handles from the user-defined configuration file.
      * If no file has been configured, it initiates the copyConfig() flow.
      */
-    private void loadConfig() {
+    private void loadConfig(Runnable onConfigReady) {
         SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String uriString = prefs.getString(KEY_CONFIG_FILE_URI, null);
 
         if (uriString == null) {
             Log.d(TAG, "No config file URI found in SharedPreferences. Starting copyConfig().");
-            copyConfig(); // Ask user to create/select the config file
+            copyConfig(() -> { loadConfig(onConfigReady); }); // Ask user to create/select the config file
             return;
         }
 
@@ -286,18 +288,20 @@ public class ConfigRepository {
                 String key = keys.next();
                 banned_video_ids.put(key, bannedObject.getString(key));
             }
+
             Log.i(TAG, "Successfully loaded " + channel_handles.size() + " channel handles from config.");
+            onConfigReady.run();
 
         } catch (SecurityException e) {
             Log.e(TAG, "Permission denied for URI. The user may have revoked access. Resetting.", e);
             // Clear the invalid URI and ask the user to select the file again.
             clearUriFromPreferences();
-            copyConfig();
+            copyConfig(() -> { loadConfig(onConfigReady); });
             return;
         } catch (FileNotFoundException e) {
             Log.e(TAG, "Config file not found at URI. It may have been moved or deleted. Resetting.", e);
             clearUriFromPreferences();
-            copyConfig();
+            copyConfig(() -> { loadConfig(onConfigReady); });
             return;
         } catch (IOException e) {
             Log.e(TAG, "Failed to read config file.", e);

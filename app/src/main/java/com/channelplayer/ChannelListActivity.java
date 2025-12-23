@@ -34,7 +34,9 @@ public class ChannelListActivity extends AppCompatActivity implements ChannelAda
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_channel_list);
 
-        ConfigRepository configRepository = ConfigRepository.getInstance(this);
+        ConfigRepository configRepository = ConfigRepository.getInstance(this, () -> {
+            Log.i(TAG, "Config loaded successfully.");
+        });
 
         // 1. Setup RecyclerView and Adapter
         setupRecyclerView();

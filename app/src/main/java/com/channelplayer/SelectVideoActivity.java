@@ -42,7 +42,9 @@ public class SelectVideoActivity extends AppCompatActivity implements VideoAdapt
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_select_video);
 
-        configRepository = ConfigRepository.getInstance(this);
+        configRepository = ConfigRepository.getInstance(this, () -> {
+            Log.i(TAG, "Config loaded successfully.");
+        });
 
         channelId = getIntent().getStringExtra(CHANNEL_ID);
         if (channelId == null || channelId.isEmpty()) {

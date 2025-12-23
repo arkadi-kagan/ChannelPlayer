@@ -43,10 +43,9 @@ public class FullscreenActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         // Set the content view to our new layout with the sign-in button
         setContentView(R.layout.activity_fullscreen);
-
-        ConfigRepository.getInstance(this);
 
         // 1. Configure Google Sign-In
         // We request the user's basic profile and permission to read YouTube data.
@@ -66,13 +65,17 @@ public class FullscreenActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        // Check if a user is already signed in from a previous session
-        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
-        if (account != null) {
-            // If they are, skip the login screen and go directly to the next activity.
-            Log.d(TAG, "User already signed in. Navigating to channel list.");
-            navigateToChannelList();
-        }
+
+        ConfigRepository.getInstance(this, () -> {
+            Log.i(TAG, "Config loaded successfully.");
+            // Check if a user is already signed in from a previous session
+            GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
+            if (account != null) {
+                // If they are, skip the login screen and go directly to the next activity.
+                Log.d(TAG, "User already signed in. Navigating to channel list.");
+                navigateToChannelList();
+            }
+        });
     }
 
     // This method is called when the user clicks the sign-in button.
