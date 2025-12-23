@@ -300,6 +300,7 @@ public class PlayerActivity extends AppCompatActivity {
 
     private void writeTextToUri(Uri uri, String text) {
         try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+            assert os != null;
             os.write(text.getBytes());
             Toast.makeText(this, "Logs saved successfully", Toast.LENGTH_SHORT).show();
         } catch (IOException e) {
