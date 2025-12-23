@@ -94,7 +94,8 @@ public class VideoRepository {
                     .list(Collections.singletonList("snippet"))
                     .setChannelId(channelId)
                     .setType(Collections.singletonList("video"))
-                    .setMaxResults(25L); // Number of videos per page
+                    .setOrder("date")
+                    .setMaxResults(50L); // Number of videos per page
 
             // If we have a page token, use it to get the next page
             if (pageToken != null) {
