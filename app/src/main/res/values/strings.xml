@@ -7,6 +7,5 @@
     <string name="like">Like</string>
     <string name="dislike">Dislike</string>
     <string name="reload">Reload</string>
-    <string name="skip_ad">Skip advertisement</string>
     <string name="ban_the_video">Ban the video</string>
 </resources>

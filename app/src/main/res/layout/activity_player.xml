@@ -38,7 +38,7 @@
             android:layout_width="match_parent"
             android:gravity="center_vertical"
             android:layout_weight="2"
-            android:weightSum="6">
+            android:weightSum="5">
             <ImageButton
                 android:id="@+id/play_pause_button"
                 android:layout_width="0dp"
@@ -83,15 +83,6 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/dislike_gray"
                 android:contentDescription="@string/dislike" />
-
-            <ImageButton
-                android:id="@+id/skip_ad"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/skip_ad"
-                android:contentDescription="@string/skip_ad" />
 
         </LinearLayout>
 

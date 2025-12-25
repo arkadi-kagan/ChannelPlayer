@@ -9,6 +9,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
+import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -35,6 +36,9 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
 import com.google.api.services.youtube.model.VideoGetRatingResponse;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -64,7 +68,6 @@ public class PlayerActivity extends AppCompatActivity {
     private ImageButton banVideoButton;
     private ImageButton likeButton;
     private ImageButton dislikeButton;
-    private ImageButton skipAd;
     private SeekBar videoSeekBar;
     private boolean isPlaying = false;
     private boolean isSeeking = false;
@@ -113,7 +116,6 @@ public class PlayerActivity extends AppCompatActivity {
         banVideoButton = findViewById(R.id.ban_video);
         likeButton = findViewById(R.id.like_button);
         dislikeButton = findViewById(R.id.dislike_button);
-        skipAd = findViewById(R.id.skip_ad);
         videoSeekBar = findViewById(R.id.video_seekbar);
         controlBar = findViewById(R.id.control_bar);
 
@@ -228,24 +230,6 @@ public class PlayerActivity extends AppCompatActivity {
                 rateVideo("dislike");
             }
         });
-
-        skipAd.setOnClickListener(v -> {
-            safeInvoke("skipAd()", null);
-            Log.d("PlayerActivity", "Function skipAd called.");
-        });
-
-        //skipAd.setOnLongClickListener(v -> {
-        //    Log.d("PlayerActivity", "SkipAd button long clicked.");
-        //    youtubeWebView.evaluateJavascript("window.dumpDOM();", value -> {
-        //        String logs = getLogcatOutput();
-        //
-        //        // Use the main handler to show UI feedback or save the file
-        //        runOnUiThread(() -> {
-        //            saveLogsToFile(logs);
-        //        });
-        //    });
-        //    return true;
-        //});
 
         videoSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -400,12 +384,32 @@ public class PlayerActivity extends AppCompatActivity {
         @JavascriptInterface
         public void updateProgress(final double currentTime, final double duration, final boolean isPaused) {
             runOnUiThread(() -> {
+                if (!getCurrentVideoId().equals(videoId)) {
+                    progressAltered = false;
+                    syncAndLoadVideo();
+                }
+
                 if (isSeeking) return;
 
                 if (!Double.isNaN(duration) && duration > 0) {
                     videoSeekBar.setMax((int) duration);
+                    videoSeekBar.setMin(0);
                     videoSeekBar.setProgress((int) currentTime);
+                    videoSeekBar.invalidate();
                 }
+
+                youtubeWebView.evaluateJavascript("window.getSkipAdRectangle();", value -> {
+                    if (value.equals("null")) return;
+                    try {
+                        value = value.replace("\\", "");
+                        if (value.startsWith("\"") && value.endsWith("\""))
+                            value = value.substring(1, value.length() - 1);
+                        JSONObject rect = new JSONObject(value);
+                        youtubeWebView.allowTouch(rect);
+                    } catch (JSONException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
 
                 if (isPaused && isPlaying) {
                     playPauseButton.setImageResource(R.drawable.baseline_play_arrow_24);
@@ -416,6 +420,18 @@ public class PlayerActivity extends AppCompatActivity {
                 }
             });
         }
+        private String getCurrentVideoId() {
+            String url = youtubeWebView.getUrl();
+            if (url != null && url.contains("v=")) {
+                // Split by 'v=' and then by any subsequent params like '&'
+                String[] parts = url.split("v=");
+                if (parts.length > 1) {
+                    return parts[1].split("&")[0];
+                }
+            }
+            return videoId; // Fallback to the initial ID
+        }
+
 
         @JavascriptInterface
         public void onDomDump(String domString) {
@@ -436,6 +452,14 @@ public class PlayerActivity extends AppCompatActivity {
     private void setupWebView() {
         youtubeWebView.setWebChromeClient(new WebChromeClient() {
             @Override
+            public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+                // This will print JS errors and console.log to Logcat
+                Log.d("WebViewConsole", consoleMessage.message() + " -- From line "
+                        + consoleMessage.lineNumber() + " of "
+                        + consoleMessage.sourceId());
+                return true;
+            }
+            @Override
             public void onPermissionRequest(final PermissionRequest request) {
                 request.grant(request.getResources());
             }
@@ -446,7 +470,7 @@ public class PlayerActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
                 super.onProgressChanged(view, newProgress);
-                if (newProgress == 100 && !isScriptInjected) {
+                if (newProgress == 10 && !isScriptInjected) {
                     injectPlayerControlScript(view);
                     isScriptInjected = true;
                 }
@@ -604,6 +628,7 @@ public class PlayerActivity extends AppCompatActivity {
             window.togglePlayPause = function() {
                 const video = document.querySelector('video');
                 if (video) {
+                    video.muted = false;
                     if (video.paused) { video.play(); } else { video.pause(); }
                     return true;
                 }
@@ -624,26 +649,58 @@ public class PlayerActivity extends AppCompatActivity {
                 return video ? video.paused : true;
             };
 
+            window.ensureNoNextVideo = function() {
+                const video = document.querySelector('video');
+                // 2. Define the Stop Logic
+                const handleVideoEnd = () => {
+                    console.log("Custom End Detection: Stopping video and canceling autoplay.");
+                    video.pause();
+
+                    video.currentTime = 0.0;
+                    if (typeof AndroidBridge !== 'undefined') {
+                        AndroidBridge.updateProgress(video.currentTime, video.duration, video.paused);
+                    }
+                };
+
+                // We can check if we are at the very end during timeupdates.
+                video.addEventListener('timeupdate', () => {
+                    if (video.currentTime > 0 && video.currentTime >= video.duration - 0.05) {
+                        // If the video is essentially at the end but not paused/ended yet
+                        if (!video.paused) {
+                            handleVideoEnd();
+                        }
+                    }
+                });
+            };
+
             window.unmute = function() {
                 const video = document.querySelector('video');
                 if (video) {
                     if (video.muted) {
                         video.muted = false;
                     }
+                    window.ensureNoNextVideo();
                     // Return true if the video is now unmuted.
                     return !video.muted;
                 }
                 return false; // Video not found
             };
 
-            window.skipAd = function() {
-                var skipAd = document.querySelector('.ytp-ad-skip-button-modern');
-                if (skipAd) {
-                    skipAd.click();
-                    return true;
+            window.getSkipAdRectangle = function() {
+                var skipBtn = document.querySelector('BUTTON.ytp-ad-skip-button-modern');
+                if (skipBtn) {
+                    const rect = skipBtn.getBoundingClientRect();
+                    const dpr = window.devicePixelRatio || 1;
+
+                    return '{' +
+                        '"left":' + (rect.left * dpr) + ',' +
+                        '"top":' + (rect.top * dpr) + ',' +
+                        '"width":' + (rect.width * dpr) + ',' +
+                        '"height":' + (rect.height * dpr) +
+                    '}';
                 }
-                return false;
-            }
+                return '{"left": 0, "top": 0, "width": 0, "height": 0}';
+            };
 
             // --- Event Listeners for Progress Reporting ---
             // This part still needs to find the video initially, but it's less critical if it fails.
