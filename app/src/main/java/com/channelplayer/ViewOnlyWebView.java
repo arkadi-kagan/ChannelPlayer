@@ -21,8 +21,8 @@ public class ViewOnlyWebView extends WebView {
     private JSONObject allowedRect = new JSONObject(new HashMap<String, Integer>() {{
         put("left", 0);
         put("top", 0);
-        put("right", 0);
-        put("bottom", 0);
+        put("width", 0);
+        put("height", 0);
     }});
 
     // These constructors are needed to use the view in XML layouts
