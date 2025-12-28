@@ -114,6 +114,14 @@ public class ChannelRepository {
                     continue;
                 }
 
+                if (cached != null &&
+                        cached.title != null && cached.title.length() > 0 &&
+                        cached.thumbnailUrl != null) {
+                    channelsToRemove.remove(cached.channelId);
+                    channelsToInsert.add(cached);
+                    continue;
+                }
+
                 // Fetch full channel details using the ID
                 YouTube.Channels.List request = youtubeService.channels().list(Collections.singletonList("snippet"));
                 request.setId(Collections.singletonList(channelId));
@@ -130,7 +138,9 @@ public class ChannelRepository {
                     info.thumbnailUrl = channel.getSnippet().getThumbnails().getDefault().getUrl();
                     info.fetchedAt = System.currentTimeMillis();
 
-                    channelsToRemove.remove(info.channelId);
+                    if (cached == null) {
+                        channelsToRemove.remove(info.channelId);
+                    }
                     channelsToInsert.add(info);
                 }
             } catch (IOException e) {
@@ -140,19 +150,29 @@ public class ChannelRepository {
 
         // After fetching all, insert them into the database in one transaction.
         if (!channelsToInsert.isEmpty()) {
-            channelDao.insertAll(channelsToInsert);
             channelDao.deleteChannels(channelsToRemove);
+            channelDao.insertAll(channelsToInsert);
         }
     }
 
-    // Helper methods moved from the Activity
     private String getChannelIdFromHandle(String handle) throws IOException {
-        YouTube.Search.List request = youtubeService.search().list(Collections.singletonList("snippet"));
-        request.setQ(handle).setType(Collections.singletonList("channel")).setMaxResults(1L);
-        SearchListResponse response = request.execute();
+        // 1. Ensure the handle starts with '@' as required by the forHandle parameter
+        String formattedHandle = handle.startsWith("@") ? handle : "@" + handle;
+
+        // 2. Use the channels().list() method with the forHandle filter
+        // This is much more accurate than search().list()
+        YouTube.Channels.List request = youtubeService.channels().list(Collections.singletonList("id"));
+        request.setForHandle(formattedHandle);
+
+        ChannelListResponse response = request.execute();
+
+        // 3. The response will contain the exact channel if it exists
         if (response.getItems() != null && !response.getItems().isEmpty()) {
-            return response.getItems().get(0).getSnippet().getChannelId();
+            return response.getItems().get(0).getId();
         }
+
+        // Fallback: If forHandle fails (rarely, e.g., for very old legacy handles),
+        // you could keep the search logic, but for @cosmosprosto, forHandle is the correct way.
         return null;
     }
 }

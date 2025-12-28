@@ -111,12 +111,12 @@ public class ChannelAdapter extends ListAdapter<ChannelInfo, ChannelAdapter.Chan
      */
     public static class ChannelViewHolder extends RecyclerView.ViewHolder {
         public final ImageView channelIcon;
-        public final TextView channelDescription;
+        public final TextView channelTitle;
 
         public ChannelViewHolder(View v) {
             super(v);
             channelIcon = v.findViewById(R.id.channel_icon);
-            channelDescription = v.findViewById(R.id.channel_description);
+            channelTitle = v.findViewById(R.id.channel_title);
         }
 
         /**
@@ -125,7 +125,7 @@ public class ChannelAdapter extends ListAdapter<ChannelInfo, ChannelAdapter.Chan
          * @param listener The listener to handle clicks on the item view.
          */
         public void bind(final ChannelInfo item, final OnChannelClickListener listener) {
-            channelDescription.setText(item.title);
+            channelTitle.setText(item.title);
             Picasso.get().load(item.thumbnailUrl).into(channelIcon);
             itemView.setOnClickListener(v -> listener.onChannelClick(item));
         }

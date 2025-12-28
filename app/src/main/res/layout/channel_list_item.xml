@@ -12,7 +12,7 @@
         android:contentDescription="@string/channel_icon_description" />
 
     <TextView
-        android:id="@+id/channel_description"
+        android:id="@+id/channel_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical"
