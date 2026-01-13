@@ -28,6 +28,12 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.channelplayer.cache.AppDatabase;
+import com.channelplayer.cache.ChannelDao;
+import com.channelplayer.cache.HistoryDao;
+import com.channelplayer.cache.HistoryInfo;
+import com.channelplayer.cache.HistoryViewModel;
+import com.channelplayer.cache.HistoryViewModelFactory;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
@@ -56,6 +62,7 @@ public class PlayerActivity extends AppCompatActivity {
     public static final String EXTRA_VIDEO_ID = "EXTRA_VIDEO_ID";
     public static final String EXTRA_VIDEO_DESCRIPTION = "EXTRA_VIDEO_DESCRIPTION";
     public static final String EXTRA_ACCOUNT_NAME = "EXTRA_ACCOUNT_NAME";
+    public static final String EXTRA_POSITION = "EXTRA_POSITION";
 
     private ViewOnlyWebView youtubeWebView;
     private String videoId;
@@ -89,6 +96,8 @@ public class PlayerActivity extends AppCompatActivity {
     private ActivityResultLauncher<Intent> createFileLauncher;
     private String pendingLogs;
 
+    private HistoryDao historyDao;
+
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,6 +115,9 @@ public class PlayerActivity extends AppCompatActivity {
         videoId = getIntent().getStringExtra(EXTRA_VIDEO_ID);
         accountName = getIntent().getStringExtra(EXTRA_ACCOUNT_NAME);
         String videoDescription = getIntent().getStringExtra(EXTRA_VIDEO_DESCRIPTION);
+        progress = getIntent().getIntExtra(EXTRA_POSITION, 0);
+        if (progress > 0)
+            progressAltered = true;
 
         descriptionTextView = findViewById(R.id.video_description_text);
         descriptionTextView.setText(videoDescription);
@@ -129,7 +141,10 @@ public class PlayerActivity extends AppCompatActivity {
                     }
                 }
         );
-        
+
+        AppDatabase db = AppDatabase.getDatabase(getApplication());
+        historyDao = db.historyDao();
+
         setupWebView();
         setupPlayerControls();
         setupYoutubeApi();
@@ -233,7 +248,17 @@ public class PlayerActivity extends AppCompatActivity {
 
         videoSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {}
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (progress > 30 && (progress % 10 == 0)) {
+                    executorService.submit(() -> {
+                        HistoryInfo history = historyDao.getVideoById(videoId);
+                        if (history == null)
+                            historyDao.insert(System.currentTimeMillis(), videoId, progress);
+                        else
+                            historyDao.update(videoId, System.currentTimeMillis(), progress);
+                    });
+                }
+            }
 
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {

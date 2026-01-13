@@ -2,8 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.androidx.room)
+    alias(libs.plugins.kotlin.kapt)
 }
 
 android {
@@ -49,8 +48,12 @@ android {
     }
 }
 
-room {
-    schemaDirectory("$projectDir/schemas")
+kapt {
+    arguments {
+        // This tells kapt that it's okay if the room.schemaLocation argument
+        // isn't claimed by any annotation processor.
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
 }
 
 dependencies {
@@ -93,7 +96,7 @@ dependencies {
 
     // Room Database
     implementation(libs.androidx.room.runtime)
-    ksp(libs.androidx.room.compiler) // Use 'ksp' for the annotation processor
+    kapt(libs.androidx.room.compiler)
 
     // Lifecycle components for observing database changes
     implementation(libs.androidx.lifecycle.viewmodel)

@@ -244,7 +244,8 @@ public class ConfigRepository {
              BufferedReader reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(inputStream)))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                stringBuilder.append(line);
+                if (line.length() > 0 && line.charAt(0) != 0)
+                    stringBuilder.append(line);
             }
         }
         return stringBuilder.toString();
@@ -273,6 +274,12 @@ public class ConfigRepository {
 
             // Read the file content
             String jsonContent = readTextFromUri(configUri);
+            if (jsonContent.isEmpty()) {
+                Log.e(TAG, "Config file is empty. Resetting.");
+                clearUriFromPreferences();
+                copyConfig(() -> { loadConfig(onConfigReady); });
+                return;
+            }
 
             // Parse the JSON using org.json
             JSONObject jsonObject = new JSONObject(jsonContent);

@@ -9,13 +9,34 @@
     android:fitsSystemWindows="true"
     tools:context=".ChannelListActivity">
 
-    <androidx.appcompat.widget.SearchView
-        android:id="@+id/channel_search_view"
+    <LinearLayout
+        android:id="@+id/toolbar_layout"
         android:layout_width="match_parent"
-        android:layout_height="40dp"
-        app:iconifiedByDefault="false"
-        app:queryHint="Search videos..." />
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:weightSum="10"
+        >
 
+        <androidx.appcompat.widget.SearchView
+            android:id="@+id/channel_search_view"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="8"
+            app:iconifiedByDefault="false"
+            app:queryHint="Search videos..." />
+
+        <ImageButton
+            android:id="@+id/history_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/outline_history_24"
+            android:contentDescription="@string/history"
+            />
+
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/channel_recycler_view"

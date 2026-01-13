@@ -3,6 +3,7 @@ package com.channelplayer;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.ImageButton;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
@@ -38,7 +39,7 @@ public class ChannelListActivity extends AppCompatActivity implements ChannelAda
             Log.i(TAG, "Config loaded successfully.");
         });
 
-        // 1. Setup RecyclerView and Adapter
+        setupHistoryButton();
         setupRecyclerView();
         setupSearchView();
 
@@ -61,6 +62,13 @@ public class ChannelListActivity extends AppCompatActivity implements ChannelAda
             // Handle not being signed in (e.g., go back to MainActivity)
             finish();
         }
+    }
+
+    private void setupHistoryButton() {
+        ImageButton historyButton = findViewById(R.id.history_button);
+        historyButton.setOnClickListener(
+                v -> startActivity(new Intent(this, HistoryActivity.class))
+        );
     }
 
     private void setupRecyclerView() {
