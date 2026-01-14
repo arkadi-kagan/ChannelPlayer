@@ -39,9 +39,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <meta-data
-            android:name="com.google.android.youtube.API_KEY"
-            android:value="AIzaSyBFzRIzIjl459UCZB4cxdgdrYR6Es43odk"/>
     </application>
 
 </manifest>

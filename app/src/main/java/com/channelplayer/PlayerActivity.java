@@ -256,6 +256,7 @@ public class PlayerActivity extends AppCompatActivity {
                             historyDao.insert(System.currentTimeMillis(), videoId, progress);
                         else
                             historyDao.update(videoId, System.currentTimeMillis(), progress);
+                        historyDao.deleteOldHistory(200);
                     });
                 }
             }
